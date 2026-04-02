@@ -1,0 +1,17 @@
+import time
+st = 1
+print(time.time())
+print(1)
+time.sleep(st)
+print(1)
+time.sleep(st)
+print(1)
+time.sleep(st)
+print(1)
+time.sleep(st)
+print(1)
+time.sleep(st)
+print(1)
+time.sleep(st)
+print(1)
+time.sleep(st)

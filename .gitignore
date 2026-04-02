@@ -1,0 +1,8 @@
+algorithms/*
+!algorithms/test/
+!algorithms/yolo_http_server/
+instances
+logs
+templates
+!templates/yolo_http_server.json
+__pycache__

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Process Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: auto; }
+        h1 { color: #333; }
+        .section { margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        button { padding: 5px 10px; margin: 5px; }
+        input { padding: 5px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Process Manager</h1>
+        
+        <div class="section">
+            <h2>Instances</h2>
+            <button onclick="loadInstances()">Refresh Instances</button>
+            <table id="instancesTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Status</th>
+                        <th>Template ID</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2>Algorithms</h2>
+            <button onclick="loadAlgorithms()">Refresh Algorithms</button>
+            <table id="algorithmsTable">
+                <thead>
+                    <tr><th>ID</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <div id="algorithmDetail" style="margin-top:10px; padding:10px; border:1px solid #ccc;"></div>
+        </div>
+
+        <div class="section">
+            <h2>Templates</h2>
+            <button onclick="loadTemplates()">Refresh Templates</button>
+            <table id="templatesTable">
+                <thead>
+                    <tr><th>ID</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <div id="templateDetail" style="margin-top:10px; padding:10px; border:1px solid #ccc;"></div>
+        </div>
+
+        <div class="section">
+            <h2>Create Template</h2>
+            <input type="text" id="algorithmId" placeholder="Algorithm ID" />
+            <input type="text" id="entry" placeholder="Entry (default: python main.py)" />
+            <label><input type="checkbox" id="restartAlways" /> Restart Always</label>
+            <button onclick="createTemplate()">Create Template</button>
+        </div>
+        
+        <div class="section">
+            <h2>Create Instance</h2>
+            <input type="text" id="templateId" placeholder="Template ID" />
+            <button onclick="createInstance()">Create Instance</button>
+        </div>
+    </div>
+    
+    <script>
+        async function loadInstances() {
+            const response = await fetch('/instances');
+            const instances = await response.json();
+            const tbody = document.querySelector('#instancesTable tbody');
+            tbody.innerHTML = '';
+            instances.forEach(inst => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${inst.id}</td>
+                    <td>${inst.status}</td>
+                    <td>${inst.template_id}</td>
+                    <td><button onclick="stopInstance('${inst.id}')">Stop</button></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        async function createTemplate() {
+            const algorithmId = document.getElementById('algorithmId').value;
+            const entry = document.getElementById('entry').value || 'python main.py';
+            const restartAlways = document.getElementById('restartAlways').checked;
+            const response = await fetch('/templates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ algorithm_id: algorithmId, entry: entry, restart_always: restartAlways })
+            });
+            if (response.ok) {
+                alert('Template created');
+            } else {
+                alert('Error creating template');
+            }
+        }
+        
+        async function createInstance() {
+            const templateId = document.getElementById('templateId').value;
+            const response = await fetch('/instances', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ template_id: templateId })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                alert(`Instance created: ${data.instance_id}`);
+                loadInstances();
+            } else {
+                alert('Error creating instance');
+            }
+        }
+        
+        async function stopInstance(id) {
+            const response = await fetch(`/instances/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                alert('Instance stopped');
+                loadInstances();
+            } else {
+                alert('Error stopping instance');
+            }
+        }
+
+        async function loadAlgorithms() {
+            const response = await fetch('/algorithms');
+            const algorithms = await response.json();
+            const tbody = document.querySelector('#algorithmsTable tbody');
+            tbody.innerHTML = '';
+            algorithms.forEach(id => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td><a href="#" onclick="showAlgorithmDetail('${id}');return false;">${id}</a></td>`;
+                tbody.appendChild(row);
+            });
+            document.querySelector('#algorithmDetail').innerHTML = '';
+        }
+
+        async function loadTemplates() {
+            const response = await fetch('/templates');
+            const templates = await response.json();
+            const tbody = document.querySelector('#templatesTable tbody');
+            tbody.innerHTML = '';
+            templates.forEach(id => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td><a href="#" onclick="showTemplateDetail('${id}');return false;">${id}</a></td>`;
+                tbody.appendChild(row);
+            });
+            document.querySelector('#templateDetail').innerHTML = '';
+        }
+
+        async function showAlgorithmDetail(id) {
+            const response = await fetch(`/algorithms/${id}`);
+            const detail = document.querySelector('#algorithmDetail');
+            if (!response.ok) {
+                detail.innerHTML = `<strong>Error loading algorithm ${id}</strong>`;
+                return;
+            }
+            const alg = await response.json();
+            detail.innerHTML = `
+                <strong>Algorithm</strong><br/>
+                ID: ${alg.id}<br/>
+                Version: ${alg.version}<br/>
+                Description: ${alg.description}<br/>
+                <pre>${JSON.stringify(alg.tree, null, 2)}</pre>
+            `;
+        }
+
+        async function showTemplateDetail(id) {
+            const response = await fetch(`/templates/${id}`);
+            const detail = document.querySelector('#templateDetail');
+            if (!response.ok) {
+                detail.innerHTML = `<strong>Error loading template ${id}</strong>`;
+                return;
+            }
+            const tmp = await response.json();
+            detail.innerHTML = `
+                <strong>Template</strong><br/>
+                ID: ${tmp.id}<br/>
+                Algorithm ID: ${tmp.algorithm_id}<br/>
+                Entry: ${tmp.entry}<br/>
+                Restart Always: ${tmp.restart_always}<br/>
+                Is Temporary: ${tmp.is_temporary}<br/>
+            `;
+        }
+        
+        // Load data on page load
+        loadInstances();
+        loadAlgorithms();
+        loadTemplates();
+    </script>
+</body>
+</html>
