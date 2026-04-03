@@ -4,6 +4,9 @@ from config import Config
 from enum import Enum, auto
 import shutil
 from pydantic import BaseModel, Field
+import asyncio
+import aiofiles
+from datetime import datetime
 
 
 def folder_to_list(path: str):
@@ -59,62 +62,68 @@ class Algorithm(BaseModel):
 
 
 class Log:
+    err_path: str = None
+    out_path: str = None
+    rotation_bytes: int = Config.log_max_file_size
+
     def __init__(self, id: str = None):
         if id is None:
             id = str(uuid.uuid4())
         self.id = id
+        self.err_path = os.path.join(Config.log_root_path, self.id, Config.log_err_path)
+        self.out_path = os.path.join(Config.log_root_path, self.id, Config.log_out_path)
+        self.out_file = None
+        self.err_file = None
+        os.makedirs(os.path.dirname(self.err_path), exist_ok=True)
+        os.makedirs(os.path.dirname(self.out_path), exist_ok=True)
 
-        self.err_dir = os.path.join(Config.log_root_path, self.id)
-        self.out_dir = os.path.join(Config.log_root_path, self.id)
-        os.makedirs(self.err_dir, exist_ok=True)
-        os.makedirs(self.out_dir, exist_ok=True)
+    async def check_log_err(self):
+        if self.err_file is None:
+            self.err_file = await aiofiles.open(self.err_path, "ab")
+        self.err_file = await self._rotation(self.err_path, self.err_file)
 
-        self.err_file_index = 0
-        self.out_file_index = 0
+    async def check_log_out(self):
+        if self.out_file is None:
+            self.out_file = await aiofiles.open(self.out_path, "ab")
+        self.out_file = await self._rotation(self.out_path, self.out_file)
 
-        self.err_buffer = bytearray()
-        self.out_buffer = bytearray()
+    async def _rotation(
+        self, path: str, f: aiofiles.threadpool.binary.AsyncBufferedIOBase
+    ) -> aiofiles.threadpool.binary.AsyncBufferedIOBase:
+        log_size = await f.tell()
+        if log_size > Config.log_max_file_size:
+            now = datetime.now()
+            timestamp = now.strftime("%Y%m%d%H%M%S%f")
+            await f.close()
+            os.rename(path, path + "." + timestamp)
+            return await aiofiles.open(path, "ab")
+        return f
 
-        self.err_path = self._next_err_path()
-        self.out_path = self._next_out_path()
+    async def log_out(self, data: bytes, flush_now: bool = False):
+        await self.check_log_out()
+        await self.out_file.write(data)
+        if flush_now:
+            await self.out_file.flush()
 
-    def _next_err_path(self):
-        return os.path.join(self.err_dir, f"error_{self.err_file_index}.log")
+    async def log_err(self, data: bytes, flush_now: bool = False):
+        await self.check_log_err()
+        await self.err_file.write(data)
+        if flush_now:
+            await self.err_file.flush()
 
-    def _next_out_path(self):
-        return os.path.join(self.out_dir, f"output_{self.out_file_index}.log")
+    async def get_out(self, n: int = -1) -> bytes:
+        f = await aiofiles.open(self.out_path, "rb")
+        return await f.read(n)
 
-    def _write_file(self, path, data):
-        with open(path, "ab") as f:
-            f.write(data)
+    async def get_err(self, n: int = -1) -> bytes:
+        f = await aiofiles.open(self.err_path, "rb")
+        return await f.read(n)
 
-    def _flush_buffer(self, buffer, path, file_index_attr):
-        while len(buffer) >= Config.log_buffer_size:
-            to_write = buffer[: Config.log_buffer_size]
-            buffer[: Config.log_buffer_size] = b""
-            self._write_file(path, to_write)
-            if os.path.getsize(path) >= Config.log_max_file_size:
-                setattr(self, file_index_attr, getattr(self, file_index_attr) + 1)
-                if file_index_attr == "err_file_index":
-                    self.err_path = self._next_err_path()
-                else:
-                    self.out_path = self._next_out_path()
-
-    def log_out(self, data: bytes) -> None:
-        self.out_buffer.extend(data)
-        self._flush_buffer(self.out_buffer, self.out_path, "out_file_index")
-
-    def log_err(self, data: bytes) -> None:
-        self.err_buffer.extend(data)
-        self._flush_buffer(self.err_buffer, self.err_path, "err_file_index")
-
-    def flush_all(self):
-        if self.out_buffer:
-            self._write_file(self.out_path, self.out_buffer)
-            self.out_buffer.clear()
-        if self.err_buffer:
-            self._write_file(self.err_path, self.err_buffer)
-            self.err_buffer.clear()
+    async def flush_all(self):
+        await self.check_log_out()
+        await self.check_log_err()
+        await self.out_file.flush()
+        await self.err_file.flush()
 
 
 class Template(BaseModel):
@@ -149,7 +158,7 @@ class Instance:
         self.template = template
 
     def get_ready(self):
-        self.log = Log(self.id)
+        self.log = Log(id=self.id)
         self.path = os.path.join(Config.instance_root_path, self.id)
         os.makedirs(self.path, exist_ok=True)
         self.template.algorithm.copy_to(self.path)

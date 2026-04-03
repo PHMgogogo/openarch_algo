@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -94,6 +94,32 @@ async def list_algorithms():
         return []
     return [algorithms.id]
 
+@app.post("/algorithms/upload", response_model=AlgorithmResponse)
+async def upload_algorithm(
+    file: UploadFile = File(...),
+    version: str = Form(""),
+    description: str = Form("")
+):
+    # Save the uploaded file temporarily
+    import tempfile
+    import os
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_file:
+        temp_file.write(await file.read())
+        temp_zip_path = temp_file.name
+    
+    try:
+        # Call the upload_unzip_algorithm method
+        algorithm = pm.upload_unzip_algorithm(temp_zip_path, version, description)
+        return AlgorithmResponse(
+            id=algorithm.id,
+            version=algorithm.version,
+            description=algorithm.description,
+            tree=algorithm.tree(),
+        )
+    finally:
+        # Clean up the temporary file
+        os.unlink(temp_zip_path)
+
 @app.get("/templates")
 async def list_templates():
     templates = pm.get_template("")
@@ -160,6 +186,20 @@ async def get_instance(instance_id: str):
             "err": instance.log.err_path
         }
     }
+
+@app.get("/instances/{instance_id}/logs/out")
+async def get_instance_logs_out(instance_id: str):
+    if instance_id not in pm.instances:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    logs = await pm.get_log_out(instance_id)
+    return {"logs": logs}
+
+@app.get("/instances/{instance_id}/logs/err")
+async def get_instance_logs_err(instance_id: str):
+    if instance_id not in pm.instances:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    logs = await pm.get_log_err(instance_id)
+    return {"logs": logs}
 
 @app.delete("/instances/{instance_id}")
 async def stop_instance(instance_id: str):

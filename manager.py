@@ -5,6 +5,7 @@ import os
 from config import Config
 import zipfile
 import json
+import watchdog
 
 
 def unsafe_peek(stream_reader: asyncio.StreamReader) -> int:
@@ -46,6 +47,12 @@ class ProcessManager:
         else:
             raise NotImplementedError()
 
+    async def get_log_out(self, instance_id: str, encoding: str = "utf-8") -> str:
+        out_bytes = await self.instances[instance_id].log.get_out()
+        return out_bytes.decode(encoding, errors="ignore")
+    async def get_log_err(self, instance_id: str, encoding: str = "utf-8") -> str:
+        out_bytes = await self.instances[instance_id].log.get_err()
+        return out_bytes.decode(encoding, errors="ignore")
     async def watch(self):
         keys = list(self.processes.keys())
         for iid in keys:
@@ -57,14 +64,18 @@ class ProcessManager:
                 proc = self.processes[iid]["0"]
                 out_peek_n = unsafe_peek(proc.stdout)
                 if out_peek_n > 0:
-                    self.instances[iid].log.log_out(await proc.stdout.read(out_peek_n))
+                    await self.instances[iid].log.log_out(
+                        await proc.stdout.read(out_peek_n)
+                    )
                 err_peek_n = unsafe_peek(proc.stderr)
                 if err_peek_n > 0:
-                    self.instances[iid].log.log_err(await proc.stdout.read(err_peek_n))
+                    await self.instances[iid].log.log_err(
+                        await proc.stderr.read(err_peek_n)
+                    )
                 if proc.returncode is not None:
                     del self.processes[iid]["0"]
                     self.instances[iid].status = InstanceStatus.EXITED
-                self.instances[iid].log.flush_all()
+                await self.instances[iid].log.flush_all()
 
     async def watch_loop(self, interval: float = 0.1):
         while True:

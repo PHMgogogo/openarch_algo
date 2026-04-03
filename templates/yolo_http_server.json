@@ -1,0 +1,11 @@
+{
+    "algorithm": {
+        "id": "yolo_http_server",
+        "version": "1.0.0",
+        "description": "YOLO HTTP SERVER"
+    },
+    "entry": "uvicorn main:app --host 0.0.0.0 --port 8000",
+    "restart_always": true,
+    "id": "yolo_http_server",
+    "is_temporary": false
+}

@@ -47,6 +47,16 @@
         </div>
 
         <div class="section">
+            <h2>Upload Algorithm</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <input type="file" id="algorithmFile" accept=".zip" required />
+                <input type="text" id="algorithmVersion" placeholder="Version (optional)" />
+                <input type="text" id="algorithmDescription" placeholder="Description (optional)" />
+                <button type="submit">Upload Algorithm</button>
+            </form>
+        </div>
+
+        <div class="section">
             <h2>Templates</h2>
             <button onclick="loadTemplates()">Refresh Templates</button>
             <table id="templatesTable">
@@ -71,6 +81,15 @@
             <input type="text" id="templateId" placeholder="Template ID" />
             <button onclick="createInstance()">Create Instance</button>
         </div>
+
+        <div class="section" id="logsSection" style="display: none;">
+            <h2>Logs for Instance: <span id="logInstanceId"></span></h2>
+            <button onclick="hideLogs()">Hide Logs</button>
+            <h3>Stdout</h3>
+            <pre id="stdoutLogs"></pre>
+            <h3>Stderr</h3>
+            <pre id="stderrLogs"></pre>
+        </div>
     </div>
     
     <script>
@@ -85,7 +104,10 @@
                     <td>${inst.id}</td>
                     <td>${inst.status}</td>
                     <td>${inst.template_id}</td>
-                    <td><button onclick="stopInstance('${inst.id}')">Stop</button></td>
+                    <td>
+                        <button onclick="viewLogs('${inst.id}')">View Logs</button>
+                        <button onclick="stopInstance('${inst.id}')">Stop</button>
+                    </td>
                 `;
                 tbody.appendChild(row);
             });
@@ -192,6 +214,62 @@
                 Restart Always: ${tmp.restart_always}<br/>
                 Is Temporary: ${tmp.is_temporary}<br/>
             `;
+        }
+
+        async function uploadAlgorithm(event) {
+            event.preventDefault();
+            const fileInput = document.getElementById('algorithmFile');
+            const version = document.getElementById('algorithmVersion').value;
+            const description = document.getElementById('algorithmDescription').value;
+            
+            if (!fileInput.files[0]) {
+                alert('Please select a file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('version', version);
+            formData.append('description', description);
+            
+            const response = await fetch('/algorithms/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                alert(`Algorithm uploaded: ${data.id}`);
+                loadAlgorithms();
+                // Clear form
+                fileInput.value = '';
+                document.getElementById('algorithmVersion').value = '';
+                document.getElementById('algorithmDescription').value = '';
+            } else {
+                alert('Error uploading algorithm');
+            }
+        }
+
+        // Bind form submit
+        document.getElementById('uploadForm').addEventListener('submit', uploadAlgorithm);
+
+        async function viewLogs(instanceId) {
+            document.getElementById('logInstanceId').textContent = instanceId;
+            document.getElementById('logsSection').style.display = 'block';
+
+            // Fetch stdout logs
+            const outResponse = await fetch(`/instances/${instanceId}/logs/out`);
+            const outData = await outResponse.json();
+            document.getElementById('stdoutLogs').textContent = outData.logs;
+
+            // Fetch stderr logs
+            const errResponse = await fetch(`/instances/${instanceId}/logs/err`);
+            const errData = await errResponse.json();
+            document.getElementById('stderrLogs').textContent = errData.logs;
+        }
+
+        function hideLogs() {
+            document.getElementById('logsSection').style.display = 'none';
         }
         
         // Load data on page load
