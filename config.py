@@ -11,4 +11,5 @@ class Config:
     python_cmd: str = "python"
     template_root_path: str = abspath("templates")
     algorithm_root_path: str = abspath("algorithms")
-    algorithm_info_path: str = ".info.json"
+    algorithm_info_path: str = ".algorithm.info.json"
+    instance_info_path: str = ".instance.info.json"

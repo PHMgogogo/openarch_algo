@@ -5,7 +5,7 @@ import os
 from config import Config
 import zipfile
 import json
-import watchdog
+from datetime import datetime
 
 
 def unsafe_peek(stream_reader: asyncio.StreamReader) -> int:
@@ -21,20 +21,48 @@ class ProcessManager:
     def __init__(self):
         self.processes = dict[str, dict[str, asyncio.subprocess.Process]]()
         self.instances = dict[str, Instance]()
+        self.load_instances_from_path()
 
-    async def run(self, template: Template) -> str:
-        instance = Instance(template)
+    def load_instances_from_path(self) -> None:
+        os.makedirs(Config.instance_root_path, exist_ok=True)
+        instances = os.listdir(Config.instance_root_path)
+        for instance_name in instances:
+            if instance_name not in self.instances:
+                instance_template = Template.model_validate_json(
+                    open(
+                        os.path.join(
+                            Config.instance_root_path,
+                            instance_name,
+                            Config.instance_info_path,
+                        ),
+                        encoding="utf-8",
+                    ).read()
+                )
+                self.create_instance(instance_template, instance_name)
+
+    def create_instance(self, template: Template, id: str = None) -> str:
+        if id is not None and id in self.instances:
+            raise KeyError()
+        instance = Instance(template, id)
         self.instances[instance.id] = instance
         self.processes[instance.id] = dict[str, asyncio.subprocess.Process]()
+        instance.status = InstanceStatus.STOP
+        return instance.id
+
+    async def run(self, template: Template, id: str = None) -> str:
+        instance = self.instances[self.create_instance(template, id)]
         instance.get_ready()
+        instance.save()
         await self.exec(instance.id)
-        instance.status = InstanceStatus.RUNNING
+
         return instance.id
 
     async def exec(self, id: str, entrys: list[str] = None) -> None:
         instance = self.instances[id]
         if entrys is None:
             entrys = instance.template.entry.split(" ")
+        if "0" in self.processes[id]:
+            raise KeyError()
         process = await asyncio.create_subprocess_exec(
             *entrys,
             cwd=instance.path,
@@ -42,23 +70,24 @@ class ProcessManager:
             stderr=asyncio.subprocess.PIPE,
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
         )
-        if len(self.processes[id]) == 0:
-            self.processes[id]["0"] = process
-        else:
-            raise NotImplementedError()
+        self.processes[id]["0"] = process
+        instance.status = InstanceStatus.RUNNING
+        instance.start_time = datetime.now()
 
     async def get_log_out(self, instance_id: str, encoding: str = "utf-8") -> str:
         out_bytes = await self.instances[instance_id].log.get_out()
         return out_bytes.decode(encoding, errors="ignore")
+
     async def get_log_err(self, instance_id: str, encoding: str = "utf-8") -> str:
         out_bytes = await self.instances[instance_id].log.get_err()
         return out_bytes.decode(encoding, errors="ignore")
+
     async def watch(self):
         keys = list(self.processes.keys())
         for iid in keys:
             if iid in self.processes:
                 if "0" not in self.processes[iid]:
-                    if self.instances[iid].template.restart_always:
+                    if self.instances[iid].restart_check():
                         await self.exec(iid)
                     continue
                 proc = self.processes[iid]["0"]
@@ -156,12 +185,14 @@ if __name__ == "__main__":
 
     async def main():
         pm = ProcessManager()
-        algo = pm.get_algorithm("yolo")
-        print(json.dumps(algo.tree(), indent=4, ensure_ascii=False))
-        print(algo.model_dump_json(indent=4))
-        template = pm.get_template("yolo")
-        print(template.model_dump_json(indent=4))
-        id = await pm.run(template)
+        # algo = pm.get_algorithm("yolo")
+        # print(json.dumps(algo.tree(), indent=4, ensure_ascii=False))
+        # print(algo.model_dump_json(indent=4))
+        # template = pm.get_template("yolo")
+        # print(template.model_dump_json(indent=4))
+        # id = await pm.run(template)
+        # await pm.run(pm.get_template("yolo"))
+        # await pm.run(pm.get_template("hello"))
         await pm.watch_loop()
 
     asyncio.run(main())

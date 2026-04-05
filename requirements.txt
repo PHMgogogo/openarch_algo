@@ -5,3 +5,5 @@ ultralytics
 Pillow
 numpy
 uvicorn
+aiofiles
+python-multipart

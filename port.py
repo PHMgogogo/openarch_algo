@@ -19,7 +19,9 @@ class PortChecker:
         self.allocated_ports.add((port, protocol.lower()))
         return port
 
-    def get_allocated_ports(self, protocol: Optional[str] = None) -> List[Tuple[int, str]]:
+    def get_allocated_ports(
+        self, protocol: Optional[str] = None
+    ) -> List[Tuple[int, str]]:
         """返回系统中所有已分配的端口（TCP/UDP 可选）"""
         ports = set()
         if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
