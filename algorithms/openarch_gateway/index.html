@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenArch Gateway - 代理规则管理</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+        .btn-success:hover {
+            background-color: #1e7e34;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #bd2130;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #545b62;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        .status-enabled {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .status-disabled {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: black;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        label.inline {
+            display: inline-flex;
+            align-items: center;
+            margin-bottom: 0;
+        }
+        label.inline input {
+            width: auto;
+            margin-right: 8px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .preview-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .preview-input {
+            margin-bottom: 10px;
+        }
+        .preview-result {
+            padding: 10px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-height: 40px;
+        }
+        .rule-type-display {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .rule-type-1 { background-color: #e3f2fd; color: #1976d2; }
+        .rule-type-2 { background-color: #f3e5f5; color: #7b1fa2; }
+        .rule-type-3 { background-color: #e8f5e8; color: #388e3c; }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .alert {
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OpenArch Gateway - 代理规则管理</h1>
+
+        <div id="alert-container"></div>
+
+        <div class="toolbar">
+            <div>
+                <button class="btn btn-primary" onclick="loadRules()">刷新规则</button>
+                <button class="btn btn-success" onclick="openAddModal()">添加规则</button>
+            </div>
+            <div class="preview-section">
+                <label>实时预览:</label>
+                <input type="text" id="preview-path" placeholder="输入路径进行预览" oninput="previewMatch()">
+                <div class="preview-result" id="preview-result">输入路径后将显示匹配结果</div>
+            </div>
+        </div>
+
+        <table id="rules-table">
+            <thead>
+                <tr>
+                    <th>名称</th>
+                    <th>优先级</th>
+                    <th>类型</th>
+                    <th>模式</th>
+                    <th>目标索引</th>
+                    <th>目标格式</th>
+                    <th>重写主机</th>
+                    <th>超时</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="rules-body">
+                <tr>
+                    <td colspan="10" style="text-align: center;">加载中...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 添加/编辑规则模态框 -->
+    <div id="rule-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modal-title">添加代理规则</h2>
+
+            <form id="rule-form">
+                <div class="form-group">
+                    <label for="rule-name">规则名称:</label>
+                    <input type="text" id="rule-name" required pattern="^[A-Za-z0-9_-]+$" oninput="testRule()">
+                </div>
+
+                <div class="form-group">
+                    <label for="rule-order">优先级:</label>
+                    <input type="number" id="rule-order" value="-1" oninput="testRule()">
+                </div>
+
+                <div class="form-group">
+                    <label for="rule-type">匹配类型:</label>
+                    <select id="rule-type" onchange="testRule()">
+                        <option value="1">精确匹配 (EXACT)</option>
+                        <option value="2" selected>前缀匹配 (PREFIX)</option>
+                        <option value="3">正则匹配 (REGEX)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="rule-pattern">匹配模式:</label>
+                    <input type="text" id="rule-pattern" required oninput="testRule()">
+                </div>
+
+                <div class="form-group">
+                    <label for="rule-dest-index">目标索引 (匹配组):</label>
+                    <input type="text" id="rule-dest-index" placeholder="0,1 (逗号分隔的数字)" required oninput="testRule()">
+                    <small style="color: #666; display: block; margin-top: 2px;">指定从匹配结果中提取哪些组作为目标URL的参数</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="rule-dest-format">目标格式:</label>
+                    <input type="text" id="rule-dest-format" placeholder="%s" required oninput="testRule()">
+                </div>
+
+                <div class="form-group">
+                    <label for="rule-rewrite-host">重写主机 (可选):</label>
+                    <input type="text" id="rule-rewrite-host" placeholder="backend-service.com" oninput="testRule()">
+                </div>
+
+                <div class="form-group">
+                    <label for="rule-timeout">超时时间 (秒，可选):</label>
+                    <input type="number" id="rule-timeout" step="0.1" min="0" oninput="testRule()">
+                </div>
+
+                <div class="form-group">
+                    <label class="inline">
+                        <input type="checkbox" id="rule-enable" checked onchange="testRule()">
+                        启用此规则 (是否激活该代理规则)
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="test-path">测试路径:</label>
+                    <input type="text" id="test-path" placeholder="输入路径进行测试" value="/test" oninput="testRule()">
+                </div>
+                <div class="form-group">
+                    <label for="test-host">测试主机:</label>
+                    <input type="text" id="test-host" placeholder="留空使用当前域名" oninput="testRule()">
+                    <small style="color: #666; display: block; margin-top: 2px;" id="test-host-hint">留空将使用当前页面的主机</small>
+                </div>
+                <div class="form-group">
+                    <div class="preview-result" id="test-result">输入测试路径后将自动显示测试结果</div>
+                </div>
+
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary" id="submit-btn">保存规则</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let rules = [];
+        let editingRule = null;
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 设置测试主机提示
+            document.getElementById('test-host-hint').textContent = 
+                '留空将使用当前页面的主机: ' + location.host;
+            loadRules();
+        });
+
+        // 加载规则列表
+        async function loadRules() {
+            try {
+                const response = await fetch('/pmgr/rules');
+                if (!response.ok) throw new Error('加载规则失败');
+                rules = await response.json();
+                renderRulesTable();
+            } catch (error) {
+                showAlert('加载规则失败: ' + error.message, 'error');
+            }
+        }
+
+        // 渲染规则表格
+        function renderRulesTable() {
+            const tbody = document.getElementById('rules-body');
+            tbody.innerHTML = '';
+
+            if (rules.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">暂无规则</td></tr>';
+                return;
+            }
+
+            rules.forEach(rule => {
+                const row = document.createElement('tr');
+
+                const ruleTypeClass = rule.rule_type === '1' || rule.rule_type === 1 ? 'rule-type-1' :
+                                    rule.rule_type === '2' || rule.rule_type === 2 ? 'rule-type-2' : 'rule-type-3';
+                const ruleTypeText = rule.rule_type === '1' || rule.rule_type === 1 ? '精确' :
+                                   rule.rule_type === '2' || rule.rule_type === 2 ? '前缀' : '正则';
+
+                row.innerHTML = `
+                    <td>${rule.name}</td>
+                    <td>${rule.order}</td>
+                    <td><span class="rule-type-display ${ruleTypeClass}">${ruleTypeText}</span></td>
+                    <td>${rule.pattern}</td>
+                    <td>${rule.dest_index ? rule.dest_index.join(',') : '-'}</td>
+                    <td>${rule.dest_format}</td>
+                    <td>${rule.rewrite_host || '-'}</td>
+                    <td>${rule.timeout || '-'}</td>
+                    <td><span class="status-${rule.enable ? 'enabled' : 'disabled'}">${rule.enable ? '启用' : '禁用'}</span></td>
+                    <td>
+                        ${rule.editable ? `
+                            <button class="btn btn-secondary" onclick="editRule('${rule.name}')">编辑</button>
+                            <button class="btn btn-danger" onclick="deleteRule('${rule.name}')">删除</button>
+                        ` : '<span style="color: #6c757d;">不可编辑</span>'}
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+            });
+        }
+
+        // 打开添加规则模态框
+        function openAddModal() {
+            editingRule = null;
+            document.getElementById('modal-title').textContent = '添加代理规则';
+            document.getElementById('rule-form').reset();
+            document.getElementById('rule-name').disabled = false;
+            document.getElementById('rule-dest-index').value = '0'; // 设置默认值
+            document.getElementById('submit-btn').textContent = '添加规则';
+            document.getElementById('rule-modal').style.display = 'block';
+        }
+
+        // 编辑规则
+        function editRule(name) {
+            const rule = rules.find(r => r.name === name);
+            if (!rule) return;
+
+            editingRule = rule;
+            document.getElementById('modal-title').textContent = '编辑代理规则';
+            document.getElementById('rule-name').value = rule.name;
+            document.getElementById('rule-name').disabled = true;
+            document.getElementById('rule-order').value = rule.order;
+            document.getElementById('rule-type').value = rule.rule_type;
+            document.getElementById('rule-pattern').value = rule.pattern;
+            document.getElementById('rule-dest-index').value = rule.dest_index ? rule.dest_index.join(',') : '';
+            document.getElementById('rule-dest-format').value = rule.dest_format;
+            document.getElementById('rule-rewrite-host').value = rule.rewrite_host || '';
+            document.getElementById('rule-timeout').value = rule.timeout || '';
+            document.getElementById('rule-enable').checked = rule.enable;
+            document.getElementById('submit-btn').textContent = '更新规则';
+            document.getElementById('rule-modal').style.display = 'block';
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('rule-modal').style.display = 'none';
+            editingRule = null;
+        }
+
+        // 提交表单
+        document.getElementById('rule-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            // 解析dest_index
+            const destIndexStr = document.getElementById('rule-dest-index').value.trim();
+            let destIndex = [];
+            if (destIndexStr) {
+                destIndex = destIndexStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            }
+
+            const ruleData = {
+                name: document.getElementById('rule-name').value,
+                order: parseInt(document.getElementById('rule-order').value),
+                rule_type: document.getElementById('rule-type').value, // 保持字符串类型
+                pattern: document.getElementById('rule-pattern').value,
+                dest_index: destIndex,
+                dest_format: document.getElementById('rule-dest-format').value,
+                rewrite_host: document.getElementById('rule-rewrite-host').value || null,
+                timeout: document.getElementById('rule-timeout').value ? parseFloat(document.getElementById('rule-timeout').value) : null,
+                enable: document.getElementById('rule-enable').checked
+            };
+
+            try {
+                let response;
+                if (editingRule) {
+                    // 更新规则
+                    response = await fetch('/pmgr/rules', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(ruleData)
+                    });
+                } else {
+                    // 添加规则
+                    response = await fetch('/pmgr/rules', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(ruleData)
+                    });
+                }
+
+                if (!response.ok) throw new Error('保存失败');
+
+                showAlert(editingRule ? '规则更新成功' : '规则添加成功', 'success');
+                closeModal();
+                loadRules();
+            } catch (error) {
+                showAlert('保存失败: ' + error.message, 'error');
+            }
+        });
+
+        // 测试规则
+        async function testRule() {
+            try {
+                // 解析dest_index
+                const destIndexStr = document.getElementById('rule-dest-index').value.trim();
+                let destIndex = [];
+                if (destIndexStr) {
+                    destIndex = destIndexStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                }
+
+                const ruleData = {
+                    name: document.getElementById('rule-name').value,
+                    order: parseInt(document.getElementById('rule-order').value),
+                    rule_type: document.getElementById('rule-type').value,
+                    pattern: document.getElementById('rule-pattern').value,
+                    dest_index: destIndex,
+                    dest_format: document.getElementById('rule-dest-format').value,
+                    rewrite_host: document.getElementById('rule-rewrite-host').value || null,
+                    timeout: document.getElementById('rule-timeout').value ? parseFloat(document.getElementById('rule-timeout').value) : null,
+                    enable: document.getElementById('rule-enable').checked
+                };
+
+                const testPath = document.getElementById('test-path').value.trim();
+                const testHostInput = document.getElementById('test-host').value.trim();
+                const testResultDiv = document.getElementById('test-result');
+
+                if (!testPath) {
+                    testResultDiv.textContent = '请输入测试路径';
+                    return;
+                }
+
+                const testHost = testHostInput || location.host;
+
+                const response = await fetch('/pmgr/rules/try', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        path: testPath,
+                        host: testHost,
+                        upr: ruleData
+                    })
+                });
+
+                if (!response.ok) throw new Error('测试失败');
+
+                const result = await response.json();
+                testResultDiv.innerHTML = `
+                    <strong>测试结果:</strong><br>
+                    <strong>匹配状态:</strong> ${result.match[0] ? '成功' : '失败'}<br>
+                    <strong>匹配组:</strong> ${result.match[1] && result.match[1].length > 0 ? result.match[1].join(', ') : '无'}<br>
+                    <strong>目标主机:</strong> ${result.host || '无'}<br>
+                    <strong>目标路径:</strong> ${result.dest || '无'}
+                `;
+            } catch (error) {
+                document.getElementById('test-result').textContent = '测试失败: ' + error.message;
+            }
+        }
+
+        // 删除规则
+        async function deleteRule(name) {
+            const result = await Swal.fire({
+                title: '确认删除',
+                text: `确定要删除规则 "${name}" 吗？`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                allowOutsideClick: false // 鼠标滑到弹窗外时不收回
+            });
+
+            if (!result.isConfirmed) return;
+
+            try {
+                const response = await fetch(`/pmgr/rules/${name}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error('删除失败');
+
+                Swal.fire({
+                    title: '成功',
+                    text: '规则删除成功',
+                    icon: 'success',
+                    allowOutsideClick: false
+                });
+                loadRules();
+            } catch (error) {
+                Swal.fire({
+                    title: '错误',
+                    text: '删除失败: ' + error.message,
+                    icon: 'error',
+                    allowOutsideClick: false
+                });
+            }
+        }
+
+        // 实时预览匹配
+        async function previewMatch() {
+            const path = document.getElementById('preview-path').value.trim();
+            const resultDiv = document.getElementById('preview-result');
+
+            if (!path) {
+                resultDiv.textContent = '输入路径后将显示匹配结果';
+                return;
+            }
+
+            try {
+                const response = await fetch('/pmgr/rules/match', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+
+                if (!response.ok) throw new Error('预览失败');
+
+                const result = await response.json();
+                // 后端返回的是数组 [rule, dest]
+                if (result && result.length === 2) {
+                    const [rule, dest] = result;
+                    if (rule) {
+                        resultDiv.innerHTML = `
+                            <strong>匹配规则:</strong> ${rule.name}<br>
+                            <strong>转发目标:</strong> ${dest || '无匹配'}
+                        `;
+                    } else {
+                        resultDiv.textContent = '无匹配规则';
+                    }
+                } else {
+                    resultDiv.textContent = '无匹配规则';
+                }
+            } catch (error) {
+                resultDiv.textContent = '预览失败: ' + error.message;
+            }
+        }
+
+        // 显示提示消息
+        function showAlert(message, type) {
+            Swal.fire({
+                title: type === 'success' ? '成功' : '错误',
+                text: message,
+                icon: type,
+                allowOutsideClick: false
+            });
+        }
+
+
+
+
+
+
+    </script>
+</body>
+</html>

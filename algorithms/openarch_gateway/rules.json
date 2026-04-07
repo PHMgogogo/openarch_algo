@@ -1,0 +1,42 @@
+[
+    {
+        "name": "default",
+        "order": -1,
+        "rule_type": "2",
+        "pattern": "",
+        "dest_index": [],
+        "dest_format": "/docs",
+        "rewrite_host": null,
+        "editable": false,
+        "timeout": null,
+        "enable": false
+    },
+    {
+        "name": "pmgr",
+        "order": 1,
+        "rule_type": "2",
+        "pattern": "/pmgr",
+        "dest_index": [
+            1
+        ],
+        "dest_format": "/pmgr%s",
+        "rewrite_host": null,
+        "editable": false,
+        "timeout": null,
+        "enable": true
+    },
+    {
+        "name": "yolo",
+        "order": 1,
+        "rule_type": "2",
+        "pattern": "/yolo",
+        "dest_index": [
+            1
+        ],
+        "dest_format": "%s",
+        "rewrite_host": "localhost:8001",
+        "editable": true,
+        "timeout": null,
+        "enable": true
+    }
+]

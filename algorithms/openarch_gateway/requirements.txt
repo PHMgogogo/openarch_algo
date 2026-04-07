@@ -1,0 +1,6 @@
+fastapi
+fastapi-reverse-proxy
+pydantic
+filelock
+aiohttp
+uvicorn[standard]
