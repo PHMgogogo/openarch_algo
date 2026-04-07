@@ -27,12 +27,19 @@
 
 3. **manager.py** - 进程管理器
    - `ProcessManager`: 管理算法生命周期
-     - `run()`: 从模板创建并启动实例
-     - `exec()`: 使用适当环境设置生成子进程
-     - `watch()`: 监控进程输出/错误和状态
-     - `watch_loop()`: 带可配置间隔的连续监控
-     - `get_algorithm()` / `get_template()`: 按ID或前缀检索
-     - `upload_unzip_algorithm()`: 部署算法ZIP包
+     - `__init__()`: 加载 `instances/` 目录下已有实例配置
+     - `create_instance()`: 注册新实例并准备日志目录
+     - `run()`: 从模板创建实例、准备运行目录并启动
+     - `exec()`: 在实例工作目录中生成子进程，环境变量包含 `PYTHONUNBUFFERED=1`
+     - `watch()`: 非阻塞读取子进程 `stdout` / `stderr`，写入缓冲日志；检测进程退出并更新状态
+     - `watch_loop()`: 以指定间隔循环调用 `watch()`
+     - `get_log_out()` / `get_log_err()`: 读取实例输出或错误日志内容
+     - `get_template()`: 支持按模板ID前缀查找并加载模板JSON
+     - `get_algorithm()`: 支持按算法ID前缀查找并加载算法定义，若不存在则自动创建元信息文件
+     - `upload_unzip_algorithm()`: 将 ZIP 包解压到算法目录并持久化算法元信息
+   - `Template` 和 `Instance` 运行流程
+     - 实例创建后，`get_ready()` 会将算法文件复制到 `instances/<id>/` 工作目录
+     - 运行时实例状态在 `InstanceStatus` 中跟踪：`NOT_READY`, `STOP`, `RUNNING`, `EXITED`
 
 4. **algorithms/yolo_http_server/main.py** - FastAPI HTTP检测服务器
    - **POST `/predict`**: 返回包含检测框、分数、类别ID和名称的JSON
