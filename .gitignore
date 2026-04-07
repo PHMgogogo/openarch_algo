@@ -1,6 +1,7 @@
 algorithms/*
 !algorithms/test/
 !algorithms/yolo_http_server/
+!algorithms/openarch_gateway/
 instances
 logs
 templates/*
