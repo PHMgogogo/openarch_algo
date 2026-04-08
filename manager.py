@@ -1,10 +1,8 @@
-from typing import Any
 from entity import Template, Instance, InstanceStatus, Algorithm
 import asyncio
 import os
 from config import Config
 import zipfile
-import json
 from datetime import datetime
 
 
@@ -49,12 +47,31 @@ class ProcessManager:
         instance.status = InstanceStatus.STOP
         return instance.id
 
+    async def remove_instance(self, id: str, force: bool = False) -> None:
+        if id not in self.instances:
+            raise KeyError()
+        await self.stop(id, force)
+        instance = self.instances[id]
+        await instance.clear()
+        del self.instances[id]
+        del self.processes[id]
+
+    async def stop(self, id: str, force: bool = False) -> str:
+        if "0" in self.processes[id]:
+            proc = self.processes[id]["0"]
+            if force:
+                proc.kill()
+            else:
+                proc.terminate()
+            await proc.wait()
+            del self.processes[id]["0"]
+        return id
+
     async def run(self, template: Template, id: str = None) -> str:
         instance = self.instances[self.create_instance(template, id)]
         instance.get_ready()
         instance.save()
         await self.exec(instance.id)
-
         return instance.id
 
     async def exec(self, id: str, entrys: list[str] = None) -> None:

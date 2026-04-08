@@ -9,21 +9,23 @@
         "rewrite_host": null,
         "editable": false,
         "timeout": null,
-        "enable": false
+        "enable": false,
+        "file_serve_root_path": null
     },
     {
-        "name": "pmgr",
+        "name": "smgr",
         "order": 1,
         "rule_type": "2",
-        "pattern": "/pmgr",
+        "pattern": "/smgr",
         "dest_index": [
             1
         ],
-        "dest_format": "/pmgr%s",
+        "dest_format": "/smgr%s",
         "rewrite_host": null,
         "editable": false,
         "timeout": null,
-        "enable": true
+        "enable": true,
+        "file_serve_root_path": null
     },
     {
         "name": "yolo",
@@ -37,6 +39,22 @@
         "rewrite_host": "localhost:8001",
         "editable": true,
         "timeout": null,
-        "enable": true
+        "enable": false,
+        "file_serve_root_path": null
+    },
+    {
+        "name": "file",
+        "order": 2,
+        "rule_type": "3",
+        "pattern": "/file(.*)",
+        "dest_index": [
+            0
+        ],
+        "dest_format": ".%s",
+        "rewrite_host": null,
+        "editable": true,
+        "timeout": null,
+        "enable": true,
+        "file_serve_root_path": "./"
     }
 ]

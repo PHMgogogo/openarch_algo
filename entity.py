@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 import asyncio
 import aiofiles
 from datetime import datetime, timedelta
+import shutil
 
 
 def folder_to_list(path: str):
@@ -167,6 +168,17 @@ class Log:
         await self.out_file.flush()
         await self.err_file.flush()
 
+    @property
+    def path(self) -> str:
+        return os.path.join(Config.log_root_path, self.id)
+
+    async def clear(self):
+        if self.out_file is not None:
+            await self.out_file.close()
+        if self.err_file is not None:
+            await self.err_file.close()
+        shutil.rmtree(self.path)
+
 
 class Template(BaseModel):
     algorithm: Algorithm
@@ -228,3 +240,7 @@ class Instance:
             "w",
             encoding="utf-8",
         ).write(self.template.model_dump_json(indent=4, ensure_ascii=False))
+
+    async def clear(self):
+        await self.log.clear()
+        shutil.rmtree(self.path)

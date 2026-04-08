@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,25 +13,29 @@
             padding: 20px;
             background-color: #f5f5f5;
         }
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
             background: white;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             padding: 20px;
         }
+
         h1 {
             color: #333;
             text-align: center;
             margin-bottom: 30px;
         }
+
         .toolbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
         }
+
         .btn {
             padding: 8px 16px;
             border: none;
@@ -39,59 +44,75 @@
             font-size: 14px;
             transition: background-color 0.3s;
         }
+
         .btn-primary {
             background-color: #007bff;
             color: white;
         }
+
         .btn-primary:hover {
             background-color: #0056b3;
         }
+
         .btn-success {
             background-color: #28a745;
             color: white;
         }
+
         .btn-success:hover {
             background-color: #1e7e34;
         }
+
         .btn-danger {
             background-color: #dc3545;
             color: white;
         }
+
         .btn-danger:hover {
             background-color: #bd2130;
         }
+
         .btn-secondary {
             background-color: #6c757d;
             color: white;
         }
+
         .btn-secondary:hover {
             background-color: #545b62;
         }
+
         table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 20px;
         }
-        th, td {
+
+        th,
+        td {
             padding: 12px;
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
+
         th {
             background-color: #f8f9fa;
             font-weight: 600;
         }
+
         tr:hover {
             background-color: #f8f9fa;
         }
+
         .status-enabled {
             color: #28a745;
             font-weight: bold;
         }
+
         .status-disabled {
             color: #dc3545;
             font-weight: bold;
         }
+
         .modal {
             display: none;
             position: fixed;
@@ -100,8 +121,9 @@
             top: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.5);
+            background-color: rgba(0, 0, 0, 0.5);
         }
+
         .modal-content {
             background-color: white;
             margin: 5% auto;
@@ -109,8 +131,9 @@
             border-radius: 8px;
             width: 90%;
             max-width: 600px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
+
         .close {
             color: #aaa;
             float: right;
@@ -118,42 +141,53 @@
             font-weight: bold;
             cursor: pointer;
         }
+
         .close:hover {
             color: black;
         }
+
         .form-group {
             margin-bottom: 15px;
         }
+
         label {
             display: block;
             margin-bottom: 5px;
             font-weight: 500;
         }
+
         label.inline {
             display: inline-flex;
             align-items: center;
             margin-bottom: 0;
         }
+
         label.inline input {
             width: auto;
             margin-right: 8px;
         }
-        input, select, textarea {
+
+        input,
+        select,
+        textarea {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
         }
+
         .preview-section {
             margin-top: 20px;
             padding: 15px;
             background-color: #f8f9fa;
             border-radius: 4px;
         }
+
         .preview-input {
             margin-bottom: 10px;
         }
+
         .preview-result {
             padding: 10px;
             background-color: white;
@@ -161,6 +195,7 @@
             border-radius: 4px;
             min-height: 40px;
         }
+
         .rule-type-display {
             display: inline-block;
             padding: 2px 8px;
@@ -168,9 +203,22 @@
             font-size: 12px;
             font-weight: bold;
         }
-        .rule-type-1 { background-color: #e3f2fd; color: #1976d2; }
-        .rule-type-2 { background-color: #f3e5f5; color: #7b1fa2; }
-        .rule-type-3 { background-color: #e8f5e8; color: #388e3c; }
+
+        .rule-type-1 {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .rule-type-2 {
+            background-color: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .rule-type-3 {
+            background-color: #e8f5e8;
+            color: #388e3c;
+        }
+
         .loading {
             display: inline-block;
             width: 20px;
@@ -180,20 +228,29 @@
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
+
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
+
         .alert {
             padding: 10px;
             margin-bottom: 15px;
             border-radius: 4px;
         }
+
         .alert-success {
             background-color: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
+
         .alert-error {
             background-color: #f8d7da;
             color: #721c24;
@@ -201,6 +258,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>OpenArch Gateway - 代理规则管理</h1>
@@ -230,13 +288,14 @@
                     <th>目标格式</th>
                     <th>重写主机</th>
                     <th>超时</th>
+                    <th>文件根路径</th>
                     <th>状态</th>
                     <th>操作</th>
                 </tr>
             </thead>
             <tbody id="rules-body">
                 <tr>
-                    <td colspan="10" style="text-align: center;">加载中...</td>
+                    <td colspan="11" style="text-align: center;">加载中...</td>
                 </tr>
             </tbody>
         </table>
@@ -281,7 +340,7 @@
 
                 <div class="form-group">
                     <label for="rule-dest-format">目标格式:</label>
-                    <input type="text" id="rule-dest-format" placeholder="%s" required oninput="testRule()">
+                    <input type="text" id="rule-dest-format" placeholder="%s" required oninput="testRule()" value="%s">
                 </div>
 
                 <div class="form-group">
@@ -292,6 +351,13 @@
                 <div class="form-group">
                     <label for="rule-timeout">超时时间 (秒，可选):</label>
                     <input type="number" id="rule-timeout" step="0.1" min="0" oninput="testRule()">
+                </div>
+
+                <div class="form-group">
+                    <label for="rule-file-serve-root-path">文件服务根路径 (可选):</label>
+                    <input type="text" id="rule-file-serve-root-path" placeholder="/path/to/root" oninput="testRule()">
+                    <small
+                        style="color: #666; display: block; margin-top: 2px;">设置此项后，匹配的GET请求将从该路径下提供静态文件服务，而非反向代理</small>
                 </div>
 
                 <div class="form-group">
@@ -308,7 +374,8 @@
                 <div class="form-group">
                     <label for="test-host">测试主机:</label>
                     <input type="text" id="test-host" placeholder="留空使用当前域名" oninput="testRule()">
-                    <small style="color: #666; display: block; margin-top: 2px;" id="test-host-hint">留空将使用当前页面的主机</small>
+                    <small style="color: #666; display: block; margin-top: 2px;"
+                        id="test-host-hint">留空将使用当前页面的主机</small>
                 </div>
                 <div class="form-group">
                     <div class="preview-result" id="test-result">输入测试路径后将自动显示测试结果</div>
@@ -327,9 +394,9 @@
         let editingRule = null;
 
         // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // 设置测试主机提示
-            document.getElementById('test-host-hint').textContent = 
+            document.getElementById('test-host-hint').textContent =
                 '留空将使用当前页面的主机: ' + location.host;
             loadRules();
         });
@@ -337,7 +404,7 @@
         // 加载规则列表
         async function loadRules() {
             try {
-                const response = await fetch('/pmgr/rules');
+                const response = await fetch('/smgr/rules');
                 if (!response.ok) throw new Error('加载规则失败');
                 rules = await response.json();
                 renderRulesTable();
@@ -352,7 +419,7 @@
             tbody.innerHTML = '';
 
             if (rules.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">暂无规则</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center;">暂无规则</td></tr>';
                 return;
             }
 
@@ -360,9 +427,9 @@
                 const row = document.createElement('tr');
 
                 const ruleTypeClass = rule.rule_type === '1' || rule.rule_type === 1 ? 'rule-type-1' :
-                                    rule.rule_type === '2' || rule.rule_type === 2 ? 'rule-type-2' : 'rule-type-3';
+                    rule.rule_type === '2' || rule.rule_type === 2 ? 'rule-type-2' : 'rule-type-3';
                 const ruleTypeText = rule.rule_type === '1' || rule.rule_type === 1 ? '精确' :
-                                   rule.rule_type === '2' || rule.rule_type === 2 ? '前缀' : '正则';
+                    rule.rule_type === '2' || rule.rule_type === 2 ? '前缀' : '正则';
 
                 row.innerHTML = `
                     <td>${rule.name}</td>
@@ -373,6 +440,7 @@
                     <td>${rule.dest_format}</td>
                     <td>${rule.rewrite_host || '-'}</td>
                     <td>${rule.timeout || '-'}</td>
+                    <td>${rule.file_serve_root_path || '-'}</td>
                     <td><span class="status-${rule.enable ? 'enabled' : 'disabled'}">${rule.enable ? '启用' : '禁用'}</span></td>
                     <td>
                         ${rule.editable ? `
@@ -413,6 +481,7 @@
             document.getElementById('rule-dest-format').value = rule.dest_format;
             document.getElementById('rule-rewrite-host').value = rule.rewrite_host || '';
             document.getElementById('rule-timeout').value = rule.timeout || '';
+            document.getElementById('rule-file-serve-root-path').value = rule.file_serve_root_path || '';
             document.getElementById('rule-enable').checked = rule.enable;
             document.getElementById('submit-btn').textContent = '更新规则';
             document.getElementById('rule-modal').style.display = 'block';
@@ -425,7 +494,7 @@
         }
 
         // 提交表单
-        document.getElementById('rule-form').addEventListener('submit', async function(e) {
+        document.getElementById('rule-form').addEventListener('submit', async function (e) {
             e.preventDefault();
 
             // 解析dest_index
@@ -444,6 +513,7 @@
                 dest_format: document.getElementById('rule-dest-format').value,
                 rewrite_host: document.getElementById('rule-rewrite-host').value || null,
                 timeout: document.getElementById('rule-timeout').value ? parseFloat(document.getElementById('rule-timeout').value) : null,
+                file_serve_root_path: document.getElementById('rule-file-serve-root-path').value || null,
                 enable: document.getElementById('rule-enable').checked
             };
 
@@ -451,14 +521,14 @@
                 let response;
                 if (editingRule) {
                     // 更新规则
-                    response = await fetch('/pmgr/rules', {
+                    response = await fetch('/smgr/rules', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(ruleData)
                     });
                 } else {
                     // 添加规则
-                    response = await fetch('/pmgr/rules', {
+                    response = await fetch('/smgr/rules', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(ruleData)
@@ -494,6 +564,7 @@
                     dest_format: document.getElementById('rule-dest-format').value,
                     rewrite_host: document.getElementById('rule-rewrite-host').value || null,
                     timeout: document.getElementById('rule-timeout').value ? parseFloat(document.getElementById('rule-timeout').value) : null,
+                    file_serve_root_path: document.getElementById('rule-file-serve-root-path').value || null,
                     enable: document.getElementById('rule-enable').checked
                 };
 
@@ -508,7 +579,7 @@
 
                 const testHost = testHostInput || location.host;
 
-                const response = await fetch('/pmgr/rules/try', {
+                const response = await fetch('/smgr/rules/try', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -526,7 +597,8 @@
                     <strong>匹配状态:</strong> ${result.match[0] ? '成功' : '失败'}<br>
                     <strong>匹配组:</strong> ${result.match[1] && result.match[1].length > 0 ? result.match[1].join(', ') : '无'}<br>
                     <strong>目标主机:</strong> ${result.host || '无'}<br>
-                    <strong>目标路径:</strong> ${result.dest || '无'}
+                    <strong>目标路径:</strong> ${result.dest || '无'}<br>
+                    <strong>完整文件路径:</strong> ${result.file || '无'}
                 `;
             } catch (error) {
                 document.getElementById('test-result').textContent = '测试失败: ' + error.message;
@@ -548,7 +620,7 @@
             if (!result.isConfirmed) return;
 
             try {
-                const response = await fetch(`/pmgr/rules/${name}`, { method: 'DELETE' });
+                const response = await fetch(`/smgr/rules/${name}`, { method: 'DELETE' });
                 if (!response.ok) throw new Error('删除失败');
 
                 Swal.fire({
@@ -579,7 +651,7 @@
             }
 
             try {
-                const response = await fetch('/pmgr/rules/match', {
+                const response = await fetch('/smgr/rules/match', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ path: path })
@@ -624,4 +696,5 @@
 
     </script>
 </body>
+
 </html>

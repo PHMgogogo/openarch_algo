@@ -1,14 +1,16 @@
+from fastapi import HTTPException
+from pdb import pm
 import fastapi_reverse_proxy as frp
 from enum import Enum, auto
 import re
 from fastapi import Request, WebSocket, FastAPI, APIRouter
-from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field, field_serializer
+from fastapi.responses import PlainTextResponse, FileResponse
+from pydantic import BaseModel, Field
 import uuid
 import json
 import os
 from contextlib import asynccontextmanager
-from filelock import AsyncFileLock, FileLock
+from filelock import FileLock
 import asyncio
 
 
@@ -23,12 +25,11 @@ PROXY_RULE_PATH = os.path.abspath(os.environ.get("PROXY_RULE_PATH", "./rules.jso
 PROXY_LOCK_PATH = os.path.abspath(
     os.environ.get("PROXY_LOCK_PATH", "./rules.json.lock")
 )
-EXPOSE_PROXY_MANAGER = get_bool_env_strict(
-    os.environ.get("EXPOSE_PROXY_MANAGER", "true")
+EXPOSE_SERVICE_MANAGER = get_bool_env_strict(
+    os.environ.get("EXPOSE_SERVICE_MANAGER", "true")
 )
-PROXY_MANAGER_API = os.environ.get("PROXY_MANAGER_API", "/pmgr")
+SERVICE_MANAGER_API = os.environ.get("SERVICE_MANAGER_API", "/smgr")
 # proxy_lock = AsyncFileLock(PROXY_LOCK_PATH)
-proxy_lock = FileLock(PROXY_LOCK_PATH)
 
 
 class RuleType(str, Enum):
@@ -50,6 +51,7 @@ class UrlProxyRule(BaseModel):
     editable: bool = True
     timeout: float | None = None
     enable: bool = True
+    file_serve_root_path: str | None = None
 
     def model_post_init(self, context):
         if self.dest_index is None and self.rule_type == RuleType.EXACT:
@@ -108,12 +110,6 @@ class UrlProxyRule(BaseModel):
         groups = result.groups()
         return True, list(groups) if groups else [result.group()]
 
-    @field_serializer("pattern")
-    def _serialize_pattern(self, value):
-        if isinstance(value, re.Pattern):
-            return value.pattern
-        return value
-
 
 class PathRequest(BaseModel):
     path: str
@@ -124,9 +120,11 @@ class UprTryRequest(BaseModel):
     upr: UrlProxyRule
     host: str
 
-class ProxyManager:
+
+class ServiceManager:
     _rules: dict[str, UrlProxyRule]
     _sorted_rules: list[UrlProxyRule]
+    proxy_lock = FileLock(PROXY_LOCK_PATH)
 
     def __init__(self):
         self._rules = dict[str, UrlProxyRule]()
@@ -134,7 +132,7 @@ class ProxyManager:
         # await self.load_from()
 
     async def save_to(self, path: str = PROXY_RULE_PATH):
-        with proxy_lock:
+        with self.proxy_lock:
             open(path, "w", encoding="utf-8").write(self.save())
 
     def save(self) -> str:
@@ -153,7 +151,7 @@ class ProxyManager:
         await self.save_to()
 
     async def load_from(self, path: str = PROXY_RULE_PATH):
-        with proxy_lock:
+        with self.proxy_lock:
             if not os.path.exists(path):
                 self.load("[]")
             self.load(open(path, encoding="utf-8").read())
@@ -170,7 +168,7 @@ class ProxyManager:
         return self._rules.get(name)
 
     async def add(self, upr: UrlProxyRule, update: bool = True) -> None:
-        with proxy_lock:
+        with self.proxy_lock:
             await self.load_from()
             if upr.name in self._rules:
                 if not self._rules[upr.name].editable:
@@ -179,7 +177,7 @@ class ProxyManager:
             await self.flush()
 
     async def delete(self, name: str) -> None:
-        with proxy_lock:
+        with self.proxy_lock:
             await self.load_from()
             if name in self._rules and self._rules[name].editable:
                 del self._rules[name]
@@ -207,40 +205,56 @@ class ProxyManager:
                 pass
 
 
-pm = ProxyManager()
+def safe_file_response(path: str):
+    if not os.path.exists(path):
+        return PlainTextResponse("File not found", status_code=404)
+
+    if not os.path.isfile(path):
+        return PlainTextResponse("Invalid file", status_code=400)
+
+    return FileResponse(path)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.sm = ServiceManager()
     await post_init(app)
 
-    @app.api_route("{path:path}",methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
+    @app.api_route(
+        "{path:path}",
+        methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    )
     async def gateway(request: Request, path: str):
         try:
-            upr, dest = pm.match(path)
-            raw_host = request.headers.get("host")
-            host = upr.host(raw_host)
-            if host == raw_host:
-                return PlainTextResponse("loop", status_code=508)
-            print(host)
-            return await frp.proxy_pass(request, host, dest, upr.timeout)
+            upr, dest = app.sm.match(path)
         except:
             return PlainTextResponse("no match", status_code=404)
+        if upr.file_serve_root_path is not None:
+            if request.method != "GET":
+                return PlainTextResponse("wrong request type", status_code=405)
+            return safe_file_response(os.path.join(upr.file_serve_root_path, dest))
+        raw_host = request.headers.get("host")
+        host = upr.host(raw_host)
+        if host == raw_host:
+            return PlainTextResponse("loop", status_code=508)
+        return await frp.proxy_pass(request, host, dest, upr.timeout)
 
     @app.websocket("{path:path}")
     async def ws_gateway(websocket: WebSocket, path: str):
         try:
-            upr, dest = pm.match(path)
+            upr, dest = app.sm.match(path)
             raw_host = websocket.headers.get("host")
             host = upr.host(raw_host)
             if host == raw_host:
                 return PlainTextResponse("loop", status_code=508)
+            if upr.file_serve_root_path is not None:
+                return PlainTextResponse("wrong request type", status_code=400)
             dest_url = host + "/" + dest.lstrip("/")
             return await frp.proxy_pass_websocket(websocket, dest_url)
         except:
             return PlainTextResponse("no match", status_code=404)
 
-    task = asyncio.create_task(pm.reload_loop())
+    task = asyncio.create_task(app.sm.reload_loop())
     try:
         yield
     finally:
@@ -248,33 +262,9 @@ async def lifespan(app: FastAPI):
 
 
 async def post_init(app: FastAPI):
-    await pm.load_from()
-    await pm.add(
-        UrlProxyRule(
-            name="default",
-            pattern="",
-            dest_format="/docs",
-            dest_index=[],
-            rule_type=RuleType.PREFIX,
-            editable=False,
-        )
-    )
-
-    if not EXPOSE_PROXY_MANAGER:
-        await pm.delete("pmgr")
-    if EXPOSE_PROXY_MANAGER:
-        await pm.add(
-            UrlProxyRule(
-                name="pmgr",
-                pattern="/pmgr",
-                dest_format="/pmgr%s",
-                dest_index=[1],
-                rule_type=RuleType.PREFIX,
-                editable=False,
-                order=1,
-            )
-        )
-        router = APIRouter(prefix=f"{PROXY_MANAGER_API}")
+    await app.sm.load_from()
+    if EXPOSE_SERVICE_MANAGER:
+        router = APIRouter(prefix=f"{SERVICE_MANAGER_API}")
 
         @router.get("/index.html")
         async def get_management_interface():
@@ -288,34 +278,40 @@ async def post_init(app: FastAPI):
 
         @router.get("/rules")
         async def rules_list():
-            return pm.list()
+            return app.sm.list()
 
         @router.delete("/rules/{name}")
         async def rules_delete(name: str):
-            return await pm.delete(name)
+            return await app.sm.delete(name)
 
         @router.put("/rules")
         async def rules_update(upr: UrlProxyRule):
-            return await pm.add(upr)
+            return await app.sm.add(upr)
 
         @router.post("/rules")
         async def rules_add(upr: UrlProxyRule):
-            return await pm.add(upr, update=False)
+            return await app.sm.add(upr, update=False)
 
         @router.post("/rules/match")
         async def rules_match(path_request: PathRequest):
-            return pm.match(path_request.path)
+            return app.sm.match(path_request.path)
 
         @router.post("/rules/{name}/preview")
         async def rules_preview(name: str, path: str):
-            return pm.get(name).dest(path)
+            return app.sm.get(name).dest(path)
 
         @router.post("/rules/try")
         async def rules_try(upr_try_request: UprTryRequest):
+            dest = upr_try_request.upr.dest(upr_try_request.path)
             return {
-                "match":upr_try_request.upr.match(upr_try_request.path),
-                "dest":upr_try_request.upr.dest(upr_try_request.path),
-                "host":upr_try_request.upr.host(upr_try_request.host),
+                "match": upr_try_request.upr.match(upr_try_request.path),
+                "dest": dest,
+                "host": upr_try_request.upr.host(upr_try_request.host),
+                "file": (
+                    os.path.join(upr_try_request.upr.file_serve_root_path, dest)
+                    if upr_try_request.upr.file_serve_root_path is not None
+                    else None
+                ),
             }
 
         app.include_router(router)
