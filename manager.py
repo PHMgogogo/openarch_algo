@@ -4,7 +4,7 @@ import os
 from config import Config
 import zipfile
 from datetime import datetime
-
+from algorithms.openarch_gateway.entity import UrlProxyRule
 
 def unsafe_peek(stream_reader: asyncio.StreamReader) -> int:
     if stream_reader._buffer:
@@ -47,29 +47,27 @@ class ProcessManager:
         instance.status = InstanceStatus.STOP
         return instance.id
 
-    async def remove_instance(self, id: str, force: bool = False) -> None:
-        if id not in self.instances:
-            raise KeyError()
-        await self.stop(id, force)
-        instance = self.instances[id]
+    async def remove_instance(self, id_or_prefix: str, force: bool = False) -> None:
+        instance = self.get_instance(id_or_prefix)
+        await self.stop(instance.id, force)
         await instance.clear()
-        del self.instances[id]
-        del self.processes[id]
+        del self.instances[instance.id]
+        del self.processes[instance.id]
 
-    async def stop(self, id: str, force: bool = False) -> str:
-        if "0" in self.processes[id]:
-            proc = self.processes[id]["0"]
+    async def stop(self, id_or_prefix: str, force: bool = False) -> str:
+        instance = self.get_instance(id_or_prefix)
+        if "0" in self.processes[instance.id]:
+            proc = self.processes[instance.id]["0"]
             if force:
                 proc.kill()
             else:
                 proc.terminate()
             await proc.wait()
-            del self.processes[id]["0"]
-        return id
+        return instance.id
 
     async def run(self, template: Template, id: str = None) -> str:
         instance = self.instances[self.create_instance(template, id)]
-        instance.get_ready()
+        await instance.get_ready()
         instance.save()
         await self.exec(instance.id)
         return instance.id
@@ -91,12 +89,18 @@ class ProcessManager:
         instance.status = InstanceStatus.RUNNING
         instance.start_time = datetime.now()
 
-    async def get_log_out(self, instance_id: str, encoding: str = "utf-8") -> str:
-        out_bytes = await self.instances[instance_id].log.get_out()
+    async def get_log_out(
+        self, instance_id_or_prefix: str, encoding: str = "utf-8"
+    ) -> str:
+        instance = self.get_instance(instance_id_or_prefix)
+        out_bytes = await instance.log.get_out()
         return out_bytes.decode(encoding, errors="ignore")
 
-    async def get_log_err(self, instance_id: str, encoding: str = "utf-8") -> str:
-        out_bytes = await self.instances[instance_id].log.get_err()
+    async def get_log_err(
+        self, instance_id_or_prefix: str, encoding: str = "utf-8"
+    ) -> str:
+        instance = self.get_instance(instance_id_or_prefix)
+        out_bytes = await instance.log.get_err()
         return out_bytes.decode(encoding, errors="ignore")
 
     async def watch(self):
@@ -134,16 +138,29 @@ class ProcessManager:
     def create_template(
         self,
         algorithm: Algorithm,
+        id: str = None,
         entry: str = "python main.py",
         restart_always: bool = False,
         is_temporary: bool = True,
+        volume: bool = False,
+        restart_interval_seconds: float = 10,
+        rules: list[UrlProxyRule] = [],
     ) -> Template:
+        if id is not None:
+            existing = self.get_template(id)
+            if isinstance(existing, Template):
+                raise KeyError()
         template = Template(
             algorithm=algorithm,
             entry=entry,
             restart_always=restart_always,
             is_temporary=is_temporary,
+            volume=volume,
+            restart_interval_seconds=restart_interval_seconds,
+            rules=rules,
         )
+        if id is not None:
+            template.id = id
         if not is_temporary:
             template.save()
         return template
@@ -186,14 +203,47 @@ class ProcessManager:
         else:
             return starts_with
 
+    def get_instance(self, id_or_prefix: str) -> list[str] | Instance | None:
+        starts_with = list[str]()
+        filenames = os.listdir(Config.instance_root_path)
+        for fn in filenames:
+            if fn.startswith(id_or_prefix):
+                starts_with.append(fn)
+        if len(starts_with) == 1:
+            return self.instances[starts_with[0]]
+        elif len(starts_with) < 1:
+            return None
+        else:
+            return starts_with
+
     def upload_unzip_algorithm(
-        self, zipfile_path: str, version: str = "", description: str = ""
+        self,
+        zipfile_path: str,
+        version: str = "",
+        description: str = "",
+        auto_unpack_topdir: bool = True,
     ) -> Algorithm:
         algorithm = Algorithm(version=version, description=description)
         path = algorithm.path
         os.makedirs(path, exist_ok=True)
         with zipfile.ZipFile(zipfile_path, "r") as zip_ref:
             zip_ref.extractall(path)
+
+        if auto_unpack_topdir:
+            items = os.listdir(path)
+            if len(items) == 1:
+                single_item = items[0]
+                single_item_path = os.path.join(path, single_item)
+                if os.path.isdir(single_item_path):
+                    for item in os.listdir(single_item_path):
+                        src = os.path.join(single_item_path, item)
+                        dst = os.path.join(path, item)
+                        if os.path.isdir(src):
+                            os.rename(src, dst)
+                        else:
+                            os.rename(src, dst)
+                    os.rmdir(single_item_path)
+
         algorithm.save()
         return algorithm
 

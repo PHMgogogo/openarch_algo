@@ -8,18 +8,20 @@ import asyncio
 import aiofiles
 from datetime import datetime, timedelta
 import shutil
+import sys
+import re
+from algorithms.openarch_gateway.entity import UrlProxyRule
+from client import service
 
 
 def folder_to_list(path: str):
-    result = []
+    result = {}
     for entry in sorted(os.listdir(path)):
         full_path = os.path.join(path, entry)
         if os.path.isdir(full_path):
-            # 文件夹用字典表示，递归获取子内容
-            result.append({entry: folder_to_list(full_path)})
+            result[entry] = folder_to_list(full_path)
         else:
-            # 文件直接用字符串
-            result.append(entry)
+            result[entry] = None
     return result
 
 
@@ -31,13 +33,17 @@ class InstanceStatus(Enum):
 
 
 class Algorithm(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()), pattern=r"^[A-Za-z0-9_-]+$"
+    )
     version: str = ""
     description: str = ""
 
-    def copy_to(self, target_path: str):
+    async def copy_to(self, target_path: str):
         os.makedirs(target_path, exist_ok=True)
-        shutil.copytree(self.path, target_path, dirs_exist_ok=True)
+        await asyncio.to_thread(
+            shutil.copytree, self.path, target_path, dirs_exist_ok=True
+        )
 
     def tree(self):
         return folder_to_list(self.path)
@@ -184,9 +190,13 @@ class Template(BaseModel):
     algorithm: Algorithm
     entry: str = "python main.py"
     restart_always: bool = False
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()), pattern=r"^[A-Za-z0-9_-]+$"
+    )
     is_temporary: bool = False
     restart_interval_seconds: float = 10
+    volume: bool = False
+    rules: list[UrlProxyRule] = []
 
     def save(self):
         if self.is_temporary:
@@ -199,6 +209,51 @@ class Template(BaseModel):
         ).write(self.model_dump_json(indent=4, ensure_ascii=False))
 
 
+async def softlink_dir_platform(src_dir: str, dst_dir: str):
+    src_dir = os.path.abspath(src_dir)
+    dst_dir = os.path.abspath(dst_dir)
+    if not os.path.isdir(src_dir):
+        raise ValueError(f"src_dir does not exist or is not a directory: {src_dir}")
+
+    if os.path.exists(dst_dir):
+        raise FileExistsError(f"dst_dir already exists: {dst_dir}")
+    parent = os.path.dirname(dst_dir)
+    if not os.path.isdir(parent):
+        raise FileNotFoundError(f"Parent directory does not exist: {parent}")
+    if sys.platform == "win32":
+        cmd = ["cmd", "/c", "mklink", "/J", dst_dir, src_dir]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(f"mklink failed: {stderr.decode().strip()}")
+    else:
+        os.symlink(src_dir, dst_dir, target_is_directory=True)
+
+
+async def unlink_dir_platform(path: str):
+    path = os.path.abspath(path)
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"path does not exist: {path}")
+
+    if os.path.islink(path):
+        os.unlink(path)
+        return
+    if sys.platform == "win32":
+        proc = await asyncio.create_subprocess_exec(
+            *["cmd", "/c", "rmdir", path],
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(f"Failed to remove junction: {stderr.decode().strip()}")
+    else:
+        raise ValueError(f"Path is not a symlink: {path}")
+
+
 class Instance:
     id: str = None
     status: InstanceStatus = InstanceStatus.NOT_READY
@@ -207,8 +262,13 @@ class Instance:
     log: Log
 
     def __init__(self, template: Template, id: str = None):
+        pattern = r"^[A-Za-z0-9_-]+$"
         if id is None:
             id = str(uuid.uuid4())
+        if not re.match(pattern, id):
+            raise ValueError(
+                f"Invalid id '{id}', only letters, numbers, underscore and hyphen are allowed (pattern: {pattern})"
+            )
         self.id = id
         self.template = template.model_copy()
         self.log = Log(id=self.id)
@@ -229,9 +289,25 @@ class Instance:
     def path(self) -> str:
         return os.path.join(Config.instance_root_path, self.id)
 
-    def get_ready(self):
-        os.makedirs(self.path, exist_ok=True)
-        self.template.algorithm.copy_to(self.path)
+    async def get_ready(self):
+        for rule in self.template.rules:
+            service.add(
+                name=rule.name,
+                order=rule.order,
+                rule_type=rule.rule_type,
+                pattern=rule.pattern,
+                dest_index=rule.dest_index,
+                rewrite_host=rule.rewrite_host,
+                editable=rule.editable,
+                timeout=rule.timeout,
+                enable=rule.enable,
+                file_serve_root_path=rule.file_serve_root_path,
+            )
+        if self.template.volume:
+            await softlink_dir_platform(self.template.algorithm.path, self.path)
+        else:
+            os.makedirs(self.path, exist_ok=True)
+            await self.template.algorithm.copy_to(self.path)
         self.status = InstanceStatus.STOP
 
     def save(self):
@@ -243,4 +319,12 @@ class Instance:
 
     async def clear(self):
         await self.log.clear()
-        shutil.rmtree(self.path)
+        for rule in self.template.rules:
+            try:
+                service.delete(rule.name)
+            except:
+                pass
+        if self.template.volume:
+            await unlink_dir_platform(self.path)
+        else:
+            shutil.rmtree(self.path)

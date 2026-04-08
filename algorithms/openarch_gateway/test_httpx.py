@@ -1,38 +1,41 @@
 import asyncio
-import aiohttp
+import httpx
 import time
 
-BASE_URL = "http://172.29.224.1:8001"
+BASE_URL = "http://127.0.0.1:8000"
 
 TOTAL_REQUESTS = 20000
 CONCURRENCY = 200
 
 
-HIT_PATH = "/pmgr/"
+HIT_PATH = "/instances"
 
 MISS_PATH = "/this_path_should_not_match_123456"
 
 
-async def worker(session, path, counter):
+async def worker(client: httpx.AsyncClient, path, counter):
     url = BASE_URL + path
-    async with session.get(url) as resp:
-        await resp.read()
-        counter.append(1)
+    response = await client.get(url)
+    await response.aread()
+    # await response.aclose() # something wrong
+    counter.append(1)
 
 
 async def run_test(path):
     counter = []
 
-    connector = aiohttp.TCPConnector(limit=0)
-    timeout = aiohttp.ClientTimeout(total=10)
+    limits = httpx.Limits(
+        max_connections=None,
+        max_keepalive_connections=None,
+    )
 
-    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+    async with httpx.AsyncClient(limits=limits, timeout=None) as client:
         tasks = []
 
         start = time.perf_counter()
 
         for _ in range(TOTAL_REQUESTS):
-            task = asyncio.create_task(worker(session, path, counter))
+            task = asyncio.create_task(worker(client, path, counter))
             tasks.append(task)
 
             if len(tasks) >= CONCURRENCY:
@@ -61,5 +64,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    import time
     asyncio.run(main())

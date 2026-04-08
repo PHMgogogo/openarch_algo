@@ -1,17 +1,16 @@
-from fastapi import HTTPException
-from pdb import pm
 import fastapi_reverse_proxy as frp
-from enum import Enum, auto
-import re
+from aiohttp_proxy_pass import proxy_pass, ClientSession
+from aiohttp import TCPConnector, ClientTimeout
 from fastapi import Request, WebSocket, FastAPI, APIRouter
 from fastapi.responses import PlainTextResponse, FileResponse
-from pydantic import BaseModel, Field
-import uuid
+from pydantic import BaseModel
 import json
 import os
 from contextlib import asynccontextmanager
 from filelock import FileLock
 import asyncio
+from entity import UrlProxyRule
+import httpx
 
 
 def get_bool_env_strict(value: str):
@@ -29,86 +28,6 @@ EXPOSE_SERVICE_MANAGER = get_bool_env_strict(
     os.environ.get("EXPOSE_SERVICE_MANAGER", "true")
 )
 SERVICE_MANAGER_API = os.environ.get("SERVICE_MANAGER_API", "/smgr")
-# proxy_lock = AsyncFileLock(PROXY_LOCK_PATH)
-
-
-class RuleType(str, Enum):
-    EXACT = auto()
-    PREFIX = auto()
-    REGEX = auto()
-
-
-class UrlProxyRule(BaseModel):
-    name: str = Field(
-        default_factory=lambda: str(uuid.uuid4()), pattern=r"^[A-Za-z0-9_-]+$"
-    )
-    order: int = -1
-    rule_type: RuleType = RuleType.EXACT
-    pattern: str | re.Pattern = ""
-    dest_index: list[int] | None = None
-    dest_format: str = None
-    rewrite_host: str | None = None
-    editable: bool = True
-    timeout: float | None = None
-    enable: bool = True
-    file_serve_root_path: str | None = None
-
-    def model_post_init(self, context):
-        if self.dest_index is None and self.rule_type == RuleType.EXACT:
-            self.dest_index = [0]
-        if self.dest_index is None and self.rule_type == RuleType.PREFIX:
-            self.dest_index = [1]
-        if self.dest_index is None and self.rule_type == RuleType.REGEX:
-            self.dest_index = [0]
-        if self.dest_format is None and self.rule_type == RuleType.EXACT:
-            self.dest_format = "%s"
-        if self.dest_format is None and self.rule_type == RuleType.PREFIX:
-            self.dest_format = "%s"
-        if self.dest_format is None and self.rule_type == RuleType.REGEX:
-            self.dest_format = "%s"
-
-    def dest(self, path: str) -> str:
-        result, groups = self.match(path)
-        if not result:
-            return ""
-        else:
-            tuples = tuple(groups[idx] for idx in self.dest_index)
-            return self.dest_format % tuples
-
-    def host(self, raw_host: str) -> str:
-        if self.rewrite_host is None:
-            return raw_host
-        else:
-            return self.rewrite_host
-
-    def match(self, path: str) -> tuple[bool, list[str]]:
-        if self.rule_type == RuleType.EXACT:
-            return self._exact_match(path)
-        elif self.rule_type == RuleType.PREFIX:
-            return self._prefix_match(path)
-        elif self.rule_type == RuleType.REGEX:
-            return self._regex_match(path)
-
-    def _exact_match(self, path: str) -> tuple[bool, list[str]]:
-        result = self.pattern == path
-        if result:
-            return True, [path]
-        return False, []
-
-    def _prefix_match(self, path: str) -> tuple[bool, list[str]]:
-        result = path.startswith(self.pattern)
-        if result:
-            l = len(self.pattern)
-            return True, [path[:l], path[l:]]
-        return False, []
-
-    def _regex_match(self, path: str) -> tuple[bool, list[str]]:
-        result = re.match(self.pattern, path)
-        if not result:
-            return False, []
-
-        groups = result.groups()
-        return True, list(groups) if groups else [result.group()]
 
 
 class PathRequest(BaseModel):
@@ -125,11 +44,27 @@ class ServiceManager:
     _rules: dict[str, UrlProxyRule]
     _sorted_rules: list[UrlProxyRule]
     proxy_lock = FileLock(PROXY_LOCK_PATH)
+    _client: httpx.AsyncClient | ClientSession
 
     def __init__(self):
         self._rules = dict[str, UrlProxyRule]()
         self._sorted_rules = list[UrlProxyRule]()
+        self._client = httpx.AsyncClient(
+            limits=httpx.Limits(
+                max_connections=1000,
+                max_keepalive_connections=5,
+                keepalive_expiry=5,
+            ),
+            timeout=None,
+        )
+        # self._client = ClientSession(
+        #     connector=TCPConnector(limit=200, limit_per_host=5)
+        # )
         # await self.load_from()
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        return self._client
 
     async def save_to(self, path: str = PROXY_RULE_PATH):
         with self.proxy_lock:
@@ -171,8 +106,10 @@ class ServiceManager:
         with self.proxy_lock:
             await self.load_from()
             if upr.name in self._rules:
+                if not update:
+                    raise ValueError(f"rule {upr.name} already exists")
                 if not self._rules[upr.name].editable:
-                    return
+                    raise ValueError(f"rule {upr.name} is not editable")
             self._rules[upr.name] = upr
             await self.flush()
 
@@ -225,19 +162,21 @@ async def lifespan(app: FastAPI):
         methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     )
     async def gateway(request: Request, path: str):
-        try:
-            upr, dest = app.sm.match(path)
-        except:
+        upr, dest = app.sm.match(path)
+        if upr is None:
             return PlainTextResponse("no match", status_code=404)
         if upr.file_serve_root_path is not None:
             if request.method != "GET":
                 return PlainTextResponse("wrong request type", status_code=405)
+            if dest.startswith("/"):
+                dest = dest[1:]
             return safe_file_response(os.path.join(upr.file_serve_root_path, dest))
         raw_host = request.headers.get("host")
         host = upr.host(raw_host)
         if host == raw_host:
             return PlainTextResponse("loop", status_code=508)
-        return await frp.proxy_pass(request, host, dest, upr.timeout)
+        request.app.state.http_proxy_client = app.sm.client
+        return await proxy_pass(request, host, dest, upr.timeout)
 
     @app.websocket("{path:path}")
     async def ws_gateway(websocket: WebSocket, path: str):
@@ -297,8 +236,8 @@ async def post_init(app: FastAPI):
             return app.sm.match(path_request.path)
 
         @router.post("/rules/{name}/preview")
-        async def rules_preview(name: str, path: str):
-            return app.sm.get(name).dest(path)
+        async def rules_preview(name: str, path_request: PathRequest):
+            return app.sm.get(name).dest(path_request.path)
 
         @router.post("/rules/try")
         async def rules_try(upr_try_request: UprTryRequest):

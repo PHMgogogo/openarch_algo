@@ -321,9 +321,9 @@
                 <div class="form-group">
                     <label for="rule-type">匹配类型:</label>
                     <select id="rule-type" onchange="testRule()">
-                        <option value="1">精确匹配 (EXACT)</option>
-                        <option value="2" selected>前缀匹配 (PREFIX)</option>
-                        <option value="3">正则匹配 (REGEX)</option>
+                        <option value="EXACT">精确匹配 (EXACT)</option>
+                        <option value="PREFIX" selected>前缀匹配 (PREFIX)</option>
+                        <option value="REGEX">正则匹配 (REGEX)</option>
                     </select>
                 </div>
 
@@ -334,8 +334,8 @@
 
                 <div class="form-group">
                     <label for="rule-dest-index">目标索引 (匹配组):</label>
-                    <input type="text" id="rule-dest-index" placeholder="0,1 (逗号分隔的数字)" required oninput="testRule()">
-                    <small style="color: #666; display: block; margin-top: 2px;">指定从匹配结果中提取哪些组作为目标URL的参数</small>
+                    <input type="text" id="rule-dest-index" placeholder="0,1 (逗号分隔的数字), 留空表示不提取" oninput="testRule()">
+                    <small style="color: #666; display: block; margin-top: 2px;">指定从匹配结果中提取哪些组作为目标URL的参数，留空表示不提取</small>
                 </div>
 
                 <div class="form-group">
@@ -426,10 +426,18 @@
             rules.forEach(rule => {
                 const row = document.createElement('tr');
 
-                const ruleTypeClass = rule.rule_type === '1' || rule.rule_type === 1 ? 'rule-type-1' :
-                    rule.rule_type === '2' || rule.rule_type === 2 ? 'rule-type-2' : 'rule-type-3';
-                const ruleTypeText = rule.rule_type === '1' || rule.rule_type === 1 ? '精确' :
-                    rule.rule_type === '2' || rule.rule_type === 2 ? '前缀' : '正则';
+                const ruleTypeValue = rule.rule_type;
+                let ruleTypeClass, ruleTypeText;
+                if (ruleTypeValue === 'EXACT' || ruleTypeValue === '1' || ruleTypeValue === 1) {
+                    ruleTypeClass = 'rule-type-1';
+                    ruleTypeText = '精确';
+                } else if (ruleTypeValue === 'PREFIX' || ruleTypeValue === '2' || ruleTypeValue === 2) {
+                    ruleTypeClass = 'rule-type-2';
+                    ruleTypeText = '前缀';
+                } else {
+                    ruleTypeClass = 'rule-type-3';
+                    ruleTypeText = '正则';
+                }
 
                 row.innerHTML = `
                     <td>${rule.name}</td>

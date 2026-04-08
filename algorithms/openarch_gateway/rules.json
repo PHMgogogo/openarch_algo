@@ -2,7 +2,7 @@
     {
         "name": "default",
         "order": -1,
-        "rule_type": "2",
+        "rule_type": "PREFIX",
         "pattern": "",
         "dest_index": [],
         "dest_format": "/docs",
@@ -15,7 +15,7 @@
     {
         "name": "smgr",
         "order": 1,
-        "rule_type": "2",
+        "rule_type": "PREFIX",
         "pattern": "/smgr",
         "dest_index": [
             1
@@ -28,24 +28,9 @@
         "file_serve_root_path": null
     },
     {
-        "name": "yolo",
-        "order": 1,
-        "rule_type": "2",
-        "pattern": "/yolo",
-        "dest_index": [
-            1
-        ],
-        "dest_format": "%s",
-        "rewrite_host": "localhost:8001",
-        "editable": true,
-        "timeout": null,
-        "enable": false,
-        "file_serve_root_path": null
-    },
-    {
         "name": "file",
         "order": 2,
-        "rule_type": "3",
+        "rule_type": "REGEX",
         "pattern": "/file(.*)",
         "dest_index": [
             0
@@ -56,5 +41,20 @@
         "timeout": null,
         "enable": true,
         "file_serve_root_path": "./"
+    },
+    {
+        "name": "pmgr",
+        "order": 1,
+        "rule_type": "PREFIX",
+        "pattern": "/pmgr",
+        "dest_index": [
+            1
+        ],
+        "dest_format": "%s",
+        "rewrite_host": "localhost:8000",
+        "editable": true,
+        "timeout": null,
+        "enable": true,
+        "file_serve_root_path": null
     }
 ]

@@ -1,9 +1,14 @@
-torch
-pydantic
-fastapi
-ultralytics
+# torch
+# ultralytics
 Pillow
 numpy
 uvicorn
 aiofiles
 python-multipart
+fastapi
+fastapi-reverse-proxy
+pydantic
+filelock
+aiohttp
+uvicorn[standard]
+h2

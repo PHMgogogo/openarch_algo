@@ -8,3 +8,4 @@ templates/*
 !templates/yolo_http_server.json
 __pycache__
 .vscode
+rules.json.lock

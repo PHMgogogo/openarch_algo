@@ -1,23 +1,218 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Process Manager</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { max-width: 800px; margin: auto; }
-        h1 { color: #333; }
-        .section { margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        button { padding: 5px 10px; margin: 5px; }
-        input { padding: 5px; margin: 5px; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        button {
+            padding: 5px 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        label {
+            margin-right: 10px;
+        }
+
+        .form-group {
+            margin: 10px 0;
+        }
+
+        input[type="text"] {
+            padding: 5px;
+            margin: 5px;
+            width: 600px;
+        }
+
+        .tree {
+            font-family: monospace;
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .tree-item {
+            margin: 2px 0;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .tree-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .tree-icon {
+            display: inline-block;
+            width: 16px;
+            text-align: center;
+            color: #666;
+        }
+
+        .tree-name {
+            margin-left: 4px;
+        }
+
+        .tree-name.file {
+            color: #000;
+        }
+
+        .tree-name.dir {
+            color: #0066cc;
+            font-weight: bold;
+        }
+
+        .tree-children {
+            display: none;
+            padding-left: 16px;
+        }
+
+        .tree-expanded>.tree-children {
+            display: block;
+        }
+
+        pre {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #f8f8f8;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Process Manager</h1>
-        
+
+        <div class="section">
+            <h2>Backend Configuration</h2>
+            <div class="form-group">
+                <label for="backendPrefix">Backend API Prefix:</label>
+                <input type="text" id="backendPrefix" placeholder="/pmgr" value="/pmgr" />
+                <button onclick="saveBackendPrefix()">Save</button>
+            </div>
+            <div id="backendPrefixStatus" style="color: #666; font-size: 14px; margin-left: 10px;"></div>
+        </div>
+
+        <div class="section">
+            <h2>Algorithms</h2>
+            <button onclick="loadAlgorithms()">Refresh Algorithms</button>
+            <table id="algorithmsTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Version</th>
+                        <th>Description</th>
+                        <th>File Tree</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Upload Algorithm</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label>File:</label>
+                    <input type="file" id="algorithmFile" accept=".zip" required />
+                </div>
+                <div class="form-group">
+                    <label>Version:</label>
+                    <input type="text" id="algorithmVersion" placeholder="Version (optional)" />
+                </div>
+                <div class="form-group">
+                    <label>Description:</label>
+                    <input type="text" id="algorithmDescription" placeholder="Description (optional)" />
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="autoUnpackTopdir" checked /> Auto unpack top directory</label>
+                </div>
+                <button type="submit">Upload Algorithm</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>Templates</h2>
+            <button onclick="loadTemplates()">Refresh Templates</button>
+            <table id="templatesTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Algorithm ID</th>
+                        <th>Entry</th>
+                        <th>Restart Always</th>
+                        <th>Restart Interval</th>
+                        <th>Is Temporary</th>
+                        <th>Volume</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Create Template</h2>
+            <div class="form-group">
+                <label>ID (optional):</label>
+                <input type="text" id="newTemplateId" placeholder="Leave empty for auto-generated ID" />
+            </div>
+            <div class="form-group">
+                <label>Algorithm ID:</label>
+                <input type="text" id="algorithmId" placeholder="Algorithm ID" />
+            </div>
+            <div class="form-group">
+                <label>Entry:</label>
+                <input type="text" id="entry" placeholder="Entry (default: python main.py)" value="python main.py" />
+            </div>
+            <div class="form-group">
+                <label>Restart Interval (seconds):</label>
+                <input type="text" id="restartInterval" placeholder="Restart interval in seconds" value="10" />
+            </div>
+            <div class="form-group">
+                <label><input type="checkbox" id="restartAlways" /> Restart Always</label>
+                <label><input type="checkbox" id="isTemporary" /> Is Temporary</label>
+                <label><input type="checkbox" id="volume" /> Volume (mount algorithms path directly)</label>
+            </div>
+            <button onclick="createTemplate()">Create Template</button>
+        </div>
+
         <div class="section">
             <h2>Instances</h2>
             <button onclick="loadInstances()">Refresh Instances</button>
@@ -33,52 +228,21 @@
                 <tbody></tbody>
             </table>
         </div>
-        
-        <div class="section">
-            <h2>Algorithms</h2>
-            <button onclick="loadAlgorithms()">Refresh Algorithms</button>
-            <table id="algorithmsTable">
-                <thead>
-                    <tr><th>ID</th></tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-            <div id="algorithmDetail" style="margin-top:10px; padding:10px; border:1px solid #ccc;"></div>
-        </div>
 
-        <div class="section">
-            <h2>Upload Algorithm</h2>
-            <form id="uploadForm" enctype="multipart/form-data">
-                <input type="file" id="algorithmFile" accept=".zip" required />
-                <input type="text" id="algorithmVersion" placeholder="Version (optional)" />
-                <input type="text" id="algorithmDescription" placeholder="Description (optional)" />
-                <button type="submit">Upload Algorithm</button>
-            </form>
-        </div>
-
-        <div class="section">
-            <h2>Templates</h2>
-            <button onclick="loadTemplates()">Refresh Templates</button>
-            <table id="templatesTable">
-                <thead>
-                    <tr><th>ID</th></tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-            <div id="templateDetail" style="margin-top:10px; padding:10px; border:1px solid #ccc;"></div>
-        </div>
-
-        <div class="section">
-            <h2>Create Template</h2>
-            <input type="text" id="algorithmId" placeholder="Algorithm ID" />
-            <input type="text" id="entry" placeholder="Entry (default: python main.py)" />
-            <label><input type="checkbox" id="restartAlways" /> Restart Always</label>
-            <button onclick="createTemplate()">Create Template</button>
-        </div>
-        
         <div class="section">
             <h2>Create Instance</h2>
-            <input type="text" id="templateId" placeholder="Template ID" />
+            <div class="form-group">
+                <label>ID (optional):</label>
+                <input type="text" id="instanceId" placeholder="Leave empty for auto-generated ID" />
+            </div>
+            <div class="form-group">
+                <label>Template ID or prefix:</label>
+                <input type="text" id="templateId" placeholder="Template ID or prefix" />
+            </div>
+            <div class="form-group">
+                <label>Entry (optional):</label>
+                <input type="text" id="instanceEntry" placeholder="Leave empty to use template's entry" />
+            </div>
             <button onclick="createInstance()">Create Instance</button>
         </div>
 
@@ -91,10 +255,136 @@
             <pre id="stderrLogs"></pre>
         </div>
     </div>
-    
+
     <script>
+        let BACKEND_PREFIX = localStorage.getItem('backendPrefix') || "/pmgr";
+
+        function saveBackendPrefix() {
+            const input = document.getElementById('backendPrefix');
+            const status = document.getElementById('backendPrefixStatus');
+            BACKEND_PREFIX = input.value.trim();
+            localStorage.setItem('backendPrefix', BACKEND_PREFIX);
+            status.textContent = `Saved: ${BACKEND_PREFIX} (saved to browser local storage)`;
+            status.style.color = '#28a745';
+            setTimeout(() => {
+                status.textContent = '';
+            }, 3000);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const input = document.getElementById('backendPrefix');
+            input.value = BACKEND_PREFIX;
+        });
+        function renderTree(treeData) {
+            const container = document.createElement('div');
+            container.className = 'tree';
+
+            function createTreeNode(name, children) {
+                const item = document.createElement('div');
+                item.className = 'tree-item';
+
+                const isDirectory = children !== null;
+
+                if (isDirectory) {
+                    const icon = document.createElement('span');
+                    icon.className = 'tree-icon';
+                    icon.textContent = '▶';
+                    item.appendChild(icon);
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'tree-name dir';
+                    nameSpan.textContent = name;
+                    item.appendChild(nameSpan);
+
+                    const childrenContainer = document.createElement('div');
+                    childrenContainer.className = 'tree-children';
+
+                    for (const [childName, childData] of Object.entries(children)) {
+                        childrenContainer.appendChild(createTreeNode(childName, childData));
+                    }
+
+                    item.appendChild(childrenContainer);
+
+                    item.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        item.classList.toggle('tree-expanded');
+                        icon.textContent = item.classList.contains('tree-expanded') ? '▼' : '▶';
+                    });
+                } else {
+                    const icon = document.createElement('span');
+                    icon.className = 'tree-icon';
+                    icon.textContent = ' ';
+                    item.appendChild(icon);
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'tree-name file';
+                    nameSpan.textContent = name;
+                    item.appendChild(nameSpan);
+                }
+
+                return item;
+            }
+
+            for (const [name, children] of Object.entries(treeData)) {
+                container.appendChild(createTreeNode(name, children));
+            }
+
+            return container;
+        }
+
+        async function loadAlgorithms() {
+            const response = await fetch(`${BACKEND_PREFIX}/algorithms`);
+            const algorithmIds = await response.json();
+            const tbody = document.querySelector('#algorithmsTable tbody');
+            tbody.innerHTML = '';
+            for (const id of algorithmIds) {
+                const detailResponse = await fetch(`${BACKEND_PREFIX}/algorithms/${id}`);
+                if (!detailResponse.ok) continue;
+                const alg = await detailResponse.json();
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${alg.id}</td>
+                    <td>${alg.version || '-'}</td>
+                    <td>${alg.description || '-'}</td>
+                    <td></td>
+                    <td></td>
+                `;
+                if (alg.tree) {
+                    const treeCell = row.cells[3];
+                    const treeContainer = renderTree(alg.tree);
+                    treeCell.appendChild(treeContainer);
+                } else {
+                    row.cells[3].textContent = '-';
+                }
+                tbody.appendChild(row);
+            }
+        }
+
+        async function loadTemplates() {
+            const response = await fetch(`${BACKEND_PREFIX}/templates`);
+            const templateIds = await response.json();
+            const tbody = document.querySelector('#templatesTable tbody');
+            tbody.innerHTML = '';
+            for (const id of templateIds) {
+                const detailResponse = await fetch(`${BACKEND_PREFIX}/templates/${id}`);
+                if (!detailResponse.ok) continue;
+                const tmp = await detailResponse.json();
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${tmp.id}</td>
+                    <td>${tmp.algorithm_id}</td>
+                    <td>${tmp.entry}</td>
+                    <td>${tmp.restart_always}</td>
+                    <td>${tmp.restart_interval_seconds}</td>
+                    <td>${tmp.is_temporary}</td>
+                    <td>${tmp.volume}</td>
+                `;
+                tbody.appendChild(row);
+            }
+        }
+
         async function loadInstances() {
-            const response = await fetch('/instances');
+            const response = await fetch(`${BACKEND_PREFIX}/instances`);
             const instances = await response.json();
             const tbody = document.querySelector('#instancesTable tbody');
             tbody.innerHTML = '';
@@ -107,46 +397,85 @@
                     <td>
                         <button onclick="viewLogs('${inst.id}')">View Logs</button>
                         <button onclick="stopInstance('${inst.id}')">Stop</button>
+                        <button onclick="deleteInstance('${inst.id}')">Delete</button>
                     </td>
                 `;
                 tbody.appendChild(row);
             });
         }
-        
+
         async function createTemplate() {
+            const templateId = document.getElementById('newTemplateId').value || null;
             const algorithmId = document.getElementById('algorithmId').value;
             const entry = document.getElementById('entry').value || 'python main.py';
+            const restartInterval = parseFloat(document.getElementById('restartInterval').value) || 10;
             const restartAlways = document.getElementById('restartAlways').checked;
-            const response = await fetch('/templates', {
+            const isTemporary = document.getElementById('isTemporary').checked;
+            const volume = document.getElementById('volume').checked;
+            const body = {
+                algorithm_id: algorithmId,
+                entry: entry,
+                restart_always: restartAlways,
+                is_temporary: isTemporary,
+                volume: volume,
+                restart_interval_seconds: restartInterval
+            };
+            if (templateId) {
+                body.id = templateId;
+            }
+            const response = await fetch(`${BACKEND_PREFIX}/templates`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ algorithm_id: algorithmId, entry: entry, restart_always: restartAlways })
+                body: JSON.stringify(body)
             });
             if (response.ok) {
                 alert('Template created');
+                loadTemplates();
+                document.getElementById('newTemplateId').value = '';
+                document.getElementById('algorithmId').value = '';
+                document.getElementById('entry').value = 'python main.py';
+                document.getElementById('restartInterval').value = '10';
+                document.getElementById('restartAlways').checked = false;
+                document.getElementById('isTemporary').checked = false;
+                document.getElementById('volume').checked = false;
             } else {
-                alert('Error creating template');
+                const error = await response.json();
+                alert(`Error creating template: ${error.detail}`);
             }
         }
-        
+
         async function createInstance() {
+            const instanceId = document.getElementById('instanceId').value || null;
             const templateId = document.getElementById('templateId').value;
-            const response = await fetch('/instances', {
+            console.log(templateId);
+            const instanceEntry = document.getElementById('instanceEntry').value;
+            const body = { template_id: templateId };
+            if (instanceEntry) {
+                body.entry = instanceEntry;
+            }
+            if (instanceId) {
+                body.id = instanceId;
+            }
+            const response = await fetch(`${BACKEND_PREFIX}/instances`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ template_id: templateId })
+                body: JSON.stringify(body)
             });
             if (response.ok) {
                 const data = await response.json();
                 alert(`Instance created: ${data.instance_id}`);
                 loadInstances();
+                document.getElementById('instanceId').value = '';
+                document.getElementById('templateId').value = '';
+                document.getElementById('instanceEntry').value = '';
             } else {
-                alert('Error creating instance');
+                const error = await response.json();
+                alert(`Error creating instance: ${error.detail}`);
             }
         }
-        
+
         async function stopInstance(id) {
-            const response = await fetch(`/instances/${id}`, { method: 'DELETE' });
+            const response = await fetch(`${BACKEND_PREFIX}/instances/${id}/stop?force=false`, { method: 'POST' });
             if (response.ok) {
                 alert('Instance stopped');
                 loadInstances();
@@ -155,65 +484,17 @@
             }
         }
 
-        async function loadAlgorithms() {
-            const response = await fetch('/algorithms');
-            const algorithms = await response.json();
-            const tbody = document.querySelector('#algorithmsTable tbody');
-            tbody.innerHTML = '';
-            algorithms.forEach(id => {
-                const row = document.createElement('tr');
-                row.innerHTML = `<td><a href="#" onclick="showAlgorithmDetail('${id}');return false;">${id}</a></td>`;
-                tbody.appendChild(row);
-            });
-            document.querySelector('#algorithmDetail').innerHTML = '';
-        }
-
-        async function loadTemplates() {
-            const response = await fetch('/templates');
-            const templates = await response.json();
-            const tbody = document.querySelector('#templatesTable tbody');
-            tbody.innerHTML = '';
-            templates.forEach(id => {
-                const row = document.createElement('tr');
-                row.innerHTML = `<td><a href="#" onclick="showTemplateDetail('${id}');return false;">${id}</a></td>`;
-                tbody.appendChild(row);
-            });
-            document.querySelector('#templateDetail').innerHTML = '';
-        }
-
-        async function showAlgorithmDetail(id) {
-            const response = await fetch(`/algorithms/${id}`);
-            const detail = document.querySelector('#algorithmDetail');
-            if (!response.ok) {
-                detail.innerHTML = `<strong>Error loading algorithm ${id}</strong>`;
+        async function deleteInstance(id) {
+            if (!confirm(`Are you sure you want to delete instance ${id}?`)) {
                 return;
             }
-            const alg = await response.json();
-            detail.innerHTML = `
-                <strong>Algorithm</strong><br/>
-                ID: ${alg.id}<br/>
-                Version: ${alg.version}<br/>
-                Description: ${alg.description}<br/>
-                <pre>${JSON.stringify(alg.tree, null, 2)}</pre>
-            `;
-        }
-
-        async function showTemplateDetail(id) {
-            const response = await fetch(`/templates/${id}`);
-            const detail = document.querySelector('#templateDetail');
-            if (!response.ok) {
-                detail.innerHTML = `<strong>Error loading template ${id}</strong>`;
-                return;
+            const response = await fetch(`${BACKEND_PREFIX}/instances/${id}?force=true`, { method: 'DELETE' });
+            if (response.ok) {
+                alert('Instance deleted');
+                loadInstances();
+            } else {
+                alert('Error deleting instance');
             }
-            const tmp = await response.json();
-            detail.innerHTML = `
-                <strong>Template</strong><br/>
-                ID: ${tmp.id}<br/>
-                Algorithm ID: ${tmp.algorithm_id}<br/>
-                Entry: ${tmp.entry}<br/>
-                Restart Always: ${tmp.restart_always}<br/>
-                Is Temporary: ${tmp.is_temporary}<br/>
-            `;
         }
 
         async function uploadAlgorithm(event) {
@@ -221,49 +502,48 @@
             const fileInput = document.getElementById('algorithmFile');
             const version = document.getElementById('algorithmVersion').value;
             const description = document.getElementById('algorithmDescription').value;
-            
+            const autoUnpackTopdir = document.getElementById('autoUnpackTopdir').checked;
+
             if (!fileInput.files[0]) {
                 alert('Please select a file');
                 return;
             }
-            
+
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
             formData.append('version', version);
             formData.append('description', description);
-            
-            const response = await fetch('/algorithms/upload', {
+            formData.append('auto_unpack_topdir', autoUnpackTopdir);
+
+            const response = await fetch(`${BACKEND_PREFIX}/algorithms/upload`, {
                 method: 'POST',
                 body: formData
             });
-            
+
             if (response.ok) {
                 const data = await response.json();
                 alert(`Algorithm uploaded: ${data.id}`);
                 loadAlgorithms();
-                // Clear form
                 fileInput.value = '';
                 document.getElementById('algorithmVersion').value = '';
                 document.getElementById('algorithmDescription').value = '';
+                document.getElementById('autoUnpackTopdir').checked = true;
             } else {
                 alert('Error uploading algorithm');
             }
         }
 
-        // Bind form submit
         document.getElementById('uploadForm').addEventListener('submit', uploadAlgorithm);
 
         async function viewLogs(instanceId) {
             document.getElementById('logInstanceId').textContent = instanceId;
             document.getElementById('logsSection').style.display = 'block';
 
-            // Fetch stdout logs
-            const outResponse = await fetch(`/instances/${instanceId}/logs/out`);
+            const outResponse = await fetch(`${BACKEND_PREFIX}/instances/${instanceId}/logs/out`);
             const outData = await outResponse.json();
             document.getElementById('stdoutLogs').textContent = outData.logs;
 
-            // Fetch stderr logs
-            const errResponse = await fetch(`/instances/${instanceId}/logs/err`);
+            const errResponse = await fetch(`${BACKEND_PREFIX}/instances/${instanceId}/logs/err`);
             const errData = await errResponse.json();
             document.getElementById('stderrLogs').textContent = errData.logs;
         }
@@ -271,11 +551,11 @@
         function hideLogs() {
             document.getElementById('logsSection').style.display = 'none';
         }
-        
-        // Load data on page load
-        loadInstances();
+
         loadAlgorithms();
         loadTemplates();
+        loadInstances();
     </script>
 </body>
+
 </html>
