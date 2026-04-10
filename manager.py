@@ -6,6 +6,7 @@ import zipfile
 from datetime import datetime
 from algorithms.openarch_gateway.entity import UrlProxyRule
 
+
 def unsafe_peek(stream_reader: asyncio.StreamReader) -> int:
     if stream_reader._buffer:
         return len(stream_reader._buffer)
@@ -71,6 +72,10 @@ class ProcessManager:
         instance.save()
         await self.exec(instance.id)
         return instance.id
+
+    async def cat(self, id: str, path: str, encoding="utf-8") -> str:
+        data = await self.get_algorithm(id).cat(path)
+        return data.decode(encoding=encoding, errors="ignore")
 
     async def exec(self, id: str, entrys: list[str] = None) -> None:
         instance = self.instances[id]

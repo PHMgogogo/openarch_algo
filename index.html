@@ -257,7 +257,7 @@
     </div>
 
     <script>
-        let BACKEND_PREFIX = localStorage.getItem('backendPrefix') || "/pmgr";
+        let BACKEND_PREFIX = localStorage.getItem('backendPrefix') ?? "/pmgr";
 
         function saveBackendPrefix() {
             const input = document.getElementById('backendPrefix');

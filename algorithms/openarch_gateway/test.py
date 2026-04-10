@@ -2,13 +2,13 @@ import asyncio
 import aiohttp
 import time
 
-BASE_URL = "http://172.29.224.1:8001"
+BASE_URL = "http://127.0.0.1:8001"
 
 TOTAL_REQUESTS = 20000
 CONCURRENCY = 200
 
 
-HIT_PATH = "/pmgr/"
+HIT_PATH = "/pmgr/instances"
 
 MISS_PATH = "/this_path_should_not_match_123456"
 
@@ -24,7 +24,7 @@ async def run_test(path):
     counter = []
 
     connector = aiohttp.TCPConnector(limit=0)
-    timeout = aiohttp.ClientTimeout(total=10)
+    timeout = aiohttp.ClientTimeout(total=None)
 
     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
         tasks = []
@@ -55,9 +55,9 @@ async def main():
     duration, qps = await run_test(HIT_PATH)
     print(f"耗时: {duration:.2f}s, QPS: {qps:.2f}")
 
-    print("\n=== 测试：未命中代理 ===")
-    duration, qps = await run_test(MISS_PATH)
-    print(f"耗时: {duration:.2f}s, QPS: {qps:.2f}")
+    # print("\n=== 测试：未命中代理 ===")
+    # duration, qps = await run_test(MISS_PATH)
+    # print(f"耗时: {duration:.2f}s, QPS: {qps:.2f}")
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from manager import ProcessManager
 from entity import Template, Algorithm
 from algorithms.openarch_gateway.entity import UrlProxyRule
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 启动监控循环
@@ -50,6 +51,10 @@ class CreateInstanceRequest(BaseModel):
     template_id: str
     id: Optional[str] = None
     entry: Optional[str] = None
+
+
+class PathRequest(BaseModel):
+    path: str
 
 
 class InstanceResponse(BaseModel):
@@ -142,6 +147,11 @@ async def upload_algorithm(
     finally:
         # Clean up the temporary file
         os.unlink(temp_zip_path)
+
+
+@app.post("/algorithms/{algorithm_id}/cat")
+async def cat_algorithm_file(algorithm_id: str, path_request: PathRequest):
+    return await pm.cat(algorithm_id, path_request.path)
 
 
 @app.get("/templates")

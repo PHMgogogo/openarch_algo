@@ -4,10 +4,11 @@
         "version": "1.0.0",
         "description": "YOLO HTTP SERVER"
     },
-    "entry": "uvicorn main:app --host 0.0.0.0 --port 8001 --root-path /yolo",
+    "entry": "uvicorn main:app --host 0.0.0.0 --port 8080",
     "restart_always": true,
     "id": "yolo_http_server",
     "is_temporary": false,
     "restart_interval_seconds": 10.0,
-    "volume": true
+    "volume": true,
+    "rules": []
 }

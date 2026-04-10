@@ -67,6 +67,10 @@ class Algorithm(BaseModel):
             encoding="utf-8",
         ).write(self.model_dump_json(indent=4, ensure_ascii=False))
 
+    async def cat(self, path: str, max_len: int = 20480) -> bytes:
+        f = await aiofiles.open(os.path.join(self.path, path), "rb")
+        return await f.read(max_len)
+
 
 class Log:
     err_path: str = None

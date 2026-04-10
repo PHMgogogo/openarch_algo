@@ -51,7 +51,7 @@
             1
         ],
         "dest_format": "%s",
-        "rewrite_host": "localhost:8000",
+        "rewrite_host": "127.0.0.1:8000",
         "editable": true,
         "timeout": null,
         "enable": true,

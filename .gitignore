@@ -2,6 +2,11 @@ algorithms/*
 !algorithms/test/
 !algorithms/yolo_http_server/
 !algorithms/openarch_gateway/
+!algorithms/ez_agent/
+algorithms/ez_agent/.env
+algorithms/ez_agent/context.md
+algorithms/ez_agent/client.py
+algorithms/ez_agent/doc.md
 instances
 logs
 templates/*

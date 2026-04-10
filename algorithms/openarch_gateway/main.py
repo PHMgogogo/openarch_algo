@@ -1,6 +1,4 @@
 import fastapi_reverse_proxy as frp
-from aiohttp_proxy_pass import proxy_pass, ClientSession
-from aiohttp import TCPConnector, ClientTimeout
 from fastapi import Request, WebSocket, FastAPI, APIRouter
 from fastapi.responses import PlainTextResponse, FileResponse
 from pydantic import BaseModel
@@ -34,7 +32,7 @@ class PathRequest(BaseModel):
     path: str
 
 
-class UprTryRequest(BaseModel):
+class UprTestRequest(BaseModel):
     path: str
     upr: UrlProxyRule
     host: str
@@ -44,26 +42,18 @@ class ServiceManager:
     _rules: dict[str, UrlProxyRule]
     _sorted_rules: list[UrlProxyRule]
     proxy_lock = FileLock(PROXY_LOCK_PATH)
-    _client: httpx.AsyncClient | ClientSession
+    _client: httpx.AsyncClient
 
     def __init__(self):
         self._rules = dict[str, UrlProxyRule]()
         self._sorted_rules = list[UrlProxyRule]()
         self._client = httpx.AsyncClient(
-            limits=httpx.Limits(
-                max_connections=1000,
-                max_keepalive_connections=5,
-                keepalive_expiry=5,
-            ),
-            timeout=None,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10)
         )
-        # self._client = ClientSession(
-        #     connector=TCPConnector(limit=200, limit_per_host=5)
-        # )
         # await self.load_from()
 
     @property
-    def client(self) -> httpx.AsyncClient:
+    async def client(self) -> httpx.AsyncClient:
         return self._client
 
     async def save_to(self, path: str = PROXY_RULE_PATH):
@@ -162,7 +152,8 @@ async def lifespan(app: FastAPI):
         methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     )
     async def gateway(request: Request, path: str):
-        upr, dest = app.sm.match(path)
+        sm: ServiceManager = app.sm
+        upr, dest = sm.match(path)
         if upr is None:
             return PlainTextResponse("no match", status_code=404)
         if upr.file_serve_root_path is not None:
@@ -175,8 +166,8 @@ async def lifespan(app: FastAPI):
         host = upr.host(raw_host)
         if host == raw_host:
             return PlainTextResponse("loop", status_code=508)
-        request.app.state.http_proxy_client = app.sm.client
-        return await proxy_pass(request, host, dest, upr.timeout)
+        request.app.state.http_proxy_client = await sm.client
+        return await frp.proxy_pass(request, host, dest, upr.timeout)
 
     @app.websocket("{path:path}")
     async def ws_gateway(websocket: WebSocket, path: str):
@@ -201,7 +192,8 @@ async def lifespan(app: FastAPI):
 
 
 async def post_init(app: FastAPI):
-    await app.sm.load_from()
+    sm: ServiceManager = app.sm
+    await sm.load_from()
     if EXPOSE_SERVICE_MANAGER:
         router = APIRouter(prefix=f"{SERVICE_MANAGER_API}")
 
@@ -239,16 +231,16 @@ async def post_init(app: FastAPI):
         async def rules_preview(name: str, path_request: PathRequest):
             return app.sm.get(name).dest(path_request.path)
 
-        @router.post("/rules/try")
-        async def rules_try(upr_try_request: UprTryRequest):
-            dest = upr_try_request.upr.dest(upr_try_request.path)
+        @router.post("/rules/test")
+        async def rules_test(upr_test_request: UprTestRequest):
+            dest = upr_test_request.upr.dest(upr_test_request.path)
             return {
-                "match": upr_try_request.upr.match(upr_try_request.path),
+                "match": upr_test_request.upr.match(upr_test_request.path),
                 "dest": dest,
-                "host": upr_try_request.upr.host(upr_try_request.host),
+                "host": upr_test_request.upr.host(upr_test_request.host),
                 "file": (
-                    os.path.join(upr_try_request.upr.file_serve_root_path, dest)
-                    if upr_try_request.upr.file_serve_root_path is not None
+                    os.path.join(upr_test_request.upr.file_serve_root_path, dest)
+                    if upr_test_request.upr.file_serve_root_path is not None
                     else None
                 ),
             }
