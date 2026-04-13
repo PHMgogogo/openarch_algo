@@ -260,6 +260,6 @@ async def delete_instance(instance_id: str, force: bool = False):
     return {"message": "Instance deleted"}
 
 
-@app.get("/")
+@app.get("{path:path}")
 async def read_root():
     return FileResponse("index.html")

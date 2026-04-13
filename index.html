@@ -546,6 +546,11 @@
             const errResponse = await fetch(`${BACKEND_PREFIX}/instances/${instanceId}/logs/err`);
             const errData = await errResponse.json();
             document.getElementById('stderrLogs').textContent = errData.logs;
+
+            const stdoutEl = document.getElementById('stdoutLogs');
+            const stderrEl = document.getElementById('stderrLogs');
+            stdoutEl.scrollTop = stdoutEl.scrollHeight;
+            stderrEl.scrollTop = stderrEl.scrollHeight;
         }
 
         function hideLogs() {

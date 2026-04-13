@@ -1,0 +1,14 @@
+{
+    "algorithm": {
+        "id": "ez_agent",
+        "version": "",
+        "description": ""
+    },
+    "entry": "uvicorn main:app --host 0.0.0.0 --port 8002",
+    "restart_always": true,
+    "id": "ez_agent",
+    "is_temporary": false,
+    "restart_interval_seconds": 10.0,
+    "volume": true,
+    "rules": []
+}

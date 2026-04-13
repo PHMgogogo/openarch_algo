@@ -68,7 +68,7 @@ class ServiceManager:
         self._sorted_rules = sorted(
             [rule for rule in self._rules.values() if rule.enable],
             key=lambda r: r.order,
-            reverse=True,
+            reverse=False,
         )
 
     async def flush(self):

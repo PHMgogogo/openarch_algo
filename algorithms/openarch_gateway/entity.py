@@ -2,12 +2,17 @@ from enum import Enum, auto
 from pydantic import BaseModel, Field
 import uuid
 import re
+
+
 class RuleType(str, Enum):
     def _generate_next_value_(name, start, count, last_values):
         return name
+
     EXACT = auto()
     PREFIX = auto()
     REGEX = auto()
+
+
 class UrlProxyRule(BaseModel):
     name: str = Field(
         default_factory=lambda: str(uuid.uuid4()), pattern=r"^[A-Za-z0-9_-]+$"
@@ -22,6 +27,7 @@ class UrlProxyRule(BaseModel):
     timeout: float | None = None
     enable: bool = True
     file_serve_root_path: str | None = None
+    default_entrance: str | None = None
 
     def model_post_init(self, context):
         if self.dest_index is None and self.rule_type == RuleType.EXACT:

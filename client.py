@@ -7,16 +7,30 @@ import sys
 from typing import Literal, get_type_hints, Any
 import os
 
-PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8000")
+PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8001/pmgr")
 RULE_MANAGER_URL = os.getenv("RULE_MANAGER_URL", "http://127.0.0.1:8001/smgr")
 
 
 class process:
+    """Process manager operations for managing algorithms, templates and instances"""
+
     class algorithms:
+        """Algorithm management operations"""
+
         def get() -> dict:
+            """Get list of all algorithms
+
+            Returns:
+                dict: List of all algorithms
+            """
             return requests.get(f"{PROCESS_MANAGER_URL}/algorithms").json()
 
         def info(id_or_prefix: str) -> dict:
+            """Get information about a specific algorithm
+
+            Args:
+                id_or_prefix: Algorithm ID or prefix to search
+            """
             return requests.get(
                 f"{PROCESS_MANAGER_URL}/algorithms/{id_or_prefix}"
             ).json()
@@ -27,6 +41,14 @@ class process:
             description: str = "",
             auto_unpack_topdir: bool = False,
         ):
+            """Upload a new algorithm archive
+
+            Args:
+                f: Archive file to upload (zip/tar.gz/etc)
+                version: Version string for this algorithm
+                description: Description of the algorithm
+                auto_unpack_topdir: Auto-unpack if archive contains single top directory
+            """
             return requests.post(
                 f"{PROCESS_MANAGER_URL}/algorithms/upload",
                 files={"file": f},
@@ -38,6 +60,12 @@ class process:
             ).json()
 
         def cat(id_or_prefix: str, path: str = None) -> str:
+            """Show content of a file within an algorithm
+
+            Args:
+                id_or_prefix: Algorithm ID or prefix
+                path: Path to file inside algorithm, show info if None
+            """
             if path is None:
                 return __class__.info(id_or_prefix)
             return requests.post(
@@ -46,10 +74,18 @@ class process:
             ).text.replace("\r\n", "\n")
 
     class templates:
+        """Template management operations"""
+
         def get() -> dict:
+            """Get list of all templates"""
             return requests.get(f"{PROCESS_MANAGER_URL}/templates").json()
 
         def info(id_or_prefix: str) -> dict:
+            """Get information about a specific template
+
+            Args:
+                id_or_prefix: Template ID or prefix
+            """
             return requests.get(
                 f"{PROCESS_MANAGER_URL}/templates/{id_or_prefix}"
             ).json()
@@ -64,6 +100,18 @@ class process:
             restart_interval_seconds: float = 10,
             rules: list[dict[str, float | str | int | bool]] = [],
         ) -> dict:
+            """Create a new template from an algorithm
+
+            Args:
+                algorithm_id_or_prefix: Source algorithm ID or prefix
+                id: Template ID (generated automatically if not provided)
+                entry: Command to run when starting the instance
+                restart_always: Always restart when process exits
+                is_temporary: Delete instance after it stops
+                volume: Use persistent volume for this template
+                restart_interval_seconds: Wait seconds before restart
+                rules: List of environment rules
+            """
             return requests.post(
                 f"{PROCESS_MANAGER_URL}/templates",
                 json={
@@ -79,10 +127,18 @@ class process:
             ).json()
 
     class instances:
+        """Running instance management operations"""
+
         def get() -> dict:
+            """Get list of all running instances"""
             return requests.get(f"{PROCESS_MANAGER_URL}/instances").json()
 
         def info(id_or_prefix: str) -> dict:
+            """Get information about a specific instance
+
+            Args:
+                id_or_prefix: Instance ID or prefix
+            """
             return requests.get(
                 f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}"
             ).json()
@@ -90,6 +146,13 @@ class process:
         def create(
             template_id_or_prefix: str, id: str = None, entry: str = None
         ) -> dict:
+            """Create and start a new instance from template
+
+            Args:
+                template_id_or_prefix: Template ID or prefix to use
+                id: Instance ID (generated automatically if not provided)
+                entry: Override the entry command from template
+            """
             return requests.post(
                 f"{PROCESS_MANAGER_URL}/instances",
                 json={
@@ -100,33 +163,63 @@ class process:
             ).json()
 
         def stop(id_or_prefix: str) -> dict:
+            """Stop a running instance
+
+            Args:
+                id_or_prefix: Instance ID or prefix to stop
+            """
             return requests.post(
                 f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/stop",
                 json={"force": False},
             ).json()
 
         def delete(id_or_prefix: str) -> dict:
+            """Delete a stopped instance
+
+            Args:
+                id_or_prefix: Instance ID or prefix to delete
+            """
             return requests.delete(
                 f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}"
             ).json()
 
         class logs:
+            """Log access operations"""
+
             def out(id_or_prefix: str) -> str:
+                """Get stdout from instance
+
+                Args:
+                    id_or_prefix: Instance ID or prefix
+                """
                 return requests.get(
                     f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/logs/out"
                 ).json()
 
             def err(id_or_prefix: str) -> str:
+                """Get stderr from instance
+
+                Args:
+                    id_or_prefix: Instance ID or prefix
+                """
                 return requests.get(
                     f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/logs/err"
                 ).json()
 
 
 class service:
+    """Rule/service manager operations for routing rules"""
+
     def get() -> dict:
+        """Get list of all routing rules"""
         return requests.get(f"{RULE_MANAGER_URL}/rules").json()
 
     def delete(name: str):
+        """Delete a routing rule by name
+
+        Args:
+            name: Name of the rule to delete
+        """
         return requests.delete(f"{RULE_MANAGER_URL}/rules/{name}").json()
 
     def update(
@@ -141,6 +234,20 @@ class service:
         enable: bool = True,
         file_serve_root_path: str = None,
     ):
+        """Update an existing routing rule
+
+        Args:
+            name: Name of the rule to update
+            order: Rule matching order (lower matches first)
+            rule_type: Matching type: EXACT, PREFIX, or REGEX
+            pattern: Matching pattern string
+            dest_index: Target backend indices
+            rewrite_host: Rewrite Host header to this value
+            editable: Allow UI editing of this rule
+            timeout: Custom timeout for this route in seconds
+            enable: Enable or disable this rule
+            file_serve_root_path: Root path for static file serving
+        """
         return requests.put(
             f"{RULE_MANAGER_URL}/rules",
             json={
@@ -169,6 +276,20 @@ class service:
         enable: bool = True,
         file_serve_root_path: str = None,
     ):
+        """Add a new routing rule
+
+        Args:
+            name: Name of the new rule
+            order: Rule matching order (lower matches first)
+            rule_type: Matching type: EXACT, PREFIX, or REGEX
+            pattern: Matching pattern string
+            dest_index: Target backend indices
+            rewrite_host: Rewrite Host header to this value
+            editable: Allow UI editing of this rule
+            timeout: Custom timeout for this route in seconds
+            enable: Enable or disable this rule
+            file_serve_root_path: Root path for static file serving
+        """
         return requests.post(
             f"{RULE_MANAGER_URL}/rules",
             json={
@@ -186,12 +307,23 @@ class service:
         ).json()
 
     def match(path: str):
+        """Match a path against existing rules
+
+        Args:
+            path: Path to match (e.g. /api/foo)
+        """
         return requests.post(
             f"{RULE_MANAGER_URL}/rules/match",
             json={"path": path},
         ).json()
 
     def preview(name: str, path: str):
+        """Preview how a rule matches a given path
+
+        Args:
+            name: Name of the rule to test
+            path: Path to match against
+        """
         return requests.post(
             f"{RULE_MANAGER_URL}/rules/{name}/preview",
             json={"path": path},
@@ -211,6 +343,22 @@ class service:
         enable: bool = True,
         file_serve_root_path: str = None,
     ):
+        """Test a routing rule without adding it
+
+        Args:
+            path: Request path to test
+            host: Request host
+            name: Rule name for testing
+            order: Rule matching order
+            rule_type: Matching type: EXACT, PREFIX, or REGEX
+            pattern: Matching pattern string
+            dest_index: Target backend indices
+            rewrite_host: Rewrite Host header to this value
+            editable: Allow UI editing of this rule
+            timeout: Custom timeout for this route in seconds
+            enable: Enable or disable this rule
+            file_serve_root_path: Root path for static file serving
+        """
         return requests.post(
             f"{RULE_MANAGER_URL}/rules/test",
             json={
@@ -232,6 +380,39 @@ class service:
         ).json()
 
 
+def _parse_docstring(docstring: str) -> tuple[str, dict[str, str]]:
+    if not docstring:
+        return "", {}
+
+    lines = [line.rstrip() for line in docstring.split("\n")]
+    lines = [line for line in lines if line.strip()]
+
+    description = []
+    param_helps = {}
+    in_args = False
+
+    for line in lines:
+        stripped = line.strip().lower()
+        if stripped.startswith(
+            ("args:", "parameters:", "params:", "returns:", "return:", "example:")
+        ):
+            in_args = stripped.startswith(("args:", "parameters:", "params:"))
+            continue
+        if in_args:
+            parts = line.strip().split(":", 1)
+            if len(parts) == 2:
+                param_name = parts[0].strip()
+                param_help = parts[1].strip()
+                param_helps[param_name] = param_help
+            continue
+        if in_args and line.startswith((" ", "\t")):
+            continue
+        if not in_args:
+            description.append(line.strip())
+
+    return " ".join(description).strip(), param_helps
+
+
 def _build_parser_recursive(
     parent_parser: argparse._SubParsersAction, current_class: Any, path: list[str]
 ) -> None:
@@ -242,8 +423,16 @@ def _build_parser_recursive(
         attr = getattr(current_class, attr_name)
 
         if isinstance(attr, type):
+            class_doc = attr.__doc__ or ""
+            class_help = (
+                class_doc.strip().split("\n")[0]
+                if class_doc
+                else f"{'.'.join(path + [attr_name])} operations"
+            )
             subparser = parent_parser.add_parser(
-                attr_name, help=f"{'.'.join(path + [attr_name])} operations"
+                attr_name,
+                help=class_help,
+                description=(attr.__doc__ or "").strip() or None,
             )
             new_parent = subparser.add_subparsers(
                 dest="command_path", required=True, help="subcommand"
@@ -251,8 +440,13 @@ def _build_parser_recursive(
             _build_parser_recursive(new_parent, attr, path + [attr_name])
 
         elif callable(attr):
+            func_doc = attr.__doc__
+            description, param_helps = _parse_docstring(func_doc)
+            help_text = (
+                description if description else f"{'.'.join(path + [attr_name])}"
+            )
             parser_cmd = parent_parser.add_parser(
-                attr_name, help=f"{'.'.join(path + [attr_name])}"
+                attr_name, help=help_text, description=description or None
             )
             type_hints = get_type_hints(attr)
             defaults = attr.__defaults__ or ()
@@ -265,6 +459,7 @@ def _build_parser_recursive(
                 is_required = i < start_default_idx
                 default = defaults[i - start_default_idx] if not is_required else None
                 param_type = type_hints.get(param, Any)
+                param_help = param_helps.get(param, param)
 
                 if param_type == bool:
                     if default is None or default is False:
@@ -272,6 +467,7 @@ def _build_parser_recursive(
                             f"--{param}",
                             action="store_true",
                             default=default if default is not None else False,
+                            help=param_help,
                         )
                     else:
                         parser_cmd.add_argument(
@@ -279,13 +475,14 @@ def _build_parser_recursive(
                             dest=param,
                             action="store_false",
                             default=default,
+                            help=param_help,
                         )
                 elif param_type == list[int] or param_type == list[dict]:
                     arg_kwargs = {
                         "nargs": "*",
                         "type": int if param_type == list[int] else json.loads,
                         "default": default if default is not None else [],
-                        "help": f"{param} ({param_type.__name__})",
+                        "help": f"{param_help} ({param_type.__name__})",
                     }
                     if not is_required:
                         arg_kwargs["required"] = False
@@ -296,21 +493,23 @@ def _build_parser_recursive(
                     arg_kwargs = {
                         "nargs": "*",
                         "default": default if default is not None else [],
-                        "help": f"{param} ({param_type})",
+                        "help": f"{param_help} ({param_type})",
                     }
                     if not is_required:
                         arg_kwargs["required"] = False
                     parser_cmd.add_argument(f"--{param}", **arg_kwargs)
                 elif param_type == io.BufferedReader:
                     parser_cmd.add_argument(
-                        param, type=argparse.FileType("rb"), help="input file"
+                        param,
+                        type=argparse.FileType("rb"),
+                        help=param_help or "input file",
                     )
                 else:
                     arg_name = f"--{param}" if not is_required else param
                     arg_kwargs = {
                         "type": _get_type_converter(param_type),
                         "default": default,
-                        "help": f"{param}",
+                        "help": param_help,
                     }
                     if not is_required:
                         arg_kwargs["required"] = False

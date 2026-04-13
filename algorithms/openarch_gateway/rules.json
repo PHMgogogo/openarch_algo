@@ -1,16 +1,17 @@
 [
     {
         "name": "default",
-        "order": -1,
+        "order": 100,
         "rule_type": "PREFIX",
-        "pattern": "",
+        "pattern": "/docs",
         "dest_index": [],
         "dest_format": "/docs",
         "rewrite_host": null,
-        "editable": false,
+        "editable": true,
         "timeout": null,
         "enable": false,
-        "file_serve_root_path": null
+        "file_serve_root_path": null,
+        "default_entrance": "/docs"
     },
     {
         "name": "smgr",
@@ -22,14 +23,15 @@
         ],
         "dest_format": "/smgr%s",
         "rewrite_host": null,
-        "editable": false,
+        "editable": true,
         "timeout": null,
         "enable": true,
-        "file_serve_root_path": null
+        "file_serve_root_path": null,
+        "default_entrance": "/smgr/index.html"
     },
     {
         "name": "file",
-        "order": 2,
+        "order": 1,
         "rule_type": "REGEX",
         "pattern": "/file(.*)",
         "dest_index": [
@@ -40,7 +42,8 @@
         "editable": true,
         "timeout": null,
         "enable": true,
-        "file_serve_root_path": "./"
+        "file_serve_root_path": "./",
+        "default_entrance": "/file/index.html"
     },
     {
         "name": "pmgr",
@@ -55,6 +58,23 @@
         "editable": true,
         "timeout": null,
         "enable": true,
-        "file_serve_root_path": null
+        "file_serve_root_path": null,
+        "default_entrance": "/pmgr/index.html"
+    },
+    {
+        "name": "ez_agent",
+        "order": 1,
+        "rule_type": "PREFIX",
+        "pattern": "/ezagent",
+        "dest_index": [
+            1
+        ],
+        "dest_format": "%s",
+        "rewrite_host": "127.0.0.1:8002",
+        "editable": true,
+        "timeout": null,
+        "enable": true,
+        "file_serve_root_path": null,
+        "default_entrance": "/ezagent/index.html"
     }
 ]

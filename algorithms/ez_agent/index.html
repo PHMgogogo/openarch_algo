@@ -231,12 +231,75 @@
         .message ul {
             padding: inherit;
         }
+
+        .config-panel {
+            background: #e9ecef;
+            padding: 12px 24px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .config-panel label {
+            font-size: 0.9rem;
+            color: #495057;
+            font-weight: 500;
+        }
+
+        .config-panel input {
+            flex: 1;
+            min-width: 200px;
+            max-width: 300px;
+            padding: 6px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .config-panel input:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+
+        .config-panel button {
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 16px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .config-panel button:hover {
+            background: #218838;
+        }
+
+        @media (max-width: 768px) {
+            .config-panel {
+                padding: 10px 16px;
+            }
+
+            .config-panel input {
+                min-width: 150px;
+                max-width: none;
+            }
+        }
     </style>
 </head>
 
 <body>
     <div class="header">
         <h1>EZ Agent Chat</h1>
+    </div>
+    <div class="config-panel">
+        <label for="api-prefix">API 前缀:</label>
+        <input type="text" id="api-prefix" placeholder="例如: /ezagent 或留空" value="/ezagent">
+        <button onclick="saveApiPrefix()">保存</button>
     </div>
     <div class="chat-container" id="chat-container">
         <div class="typing-indicator" id="typing-indicator">
@@ -258,6 +321,7 @@
             breaks: true
         });
 
+        const apiPrefixInput = document.getElementById('api-prefix');
         const chatContainer = document.getElementById('chat-container');
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
@@ -266,6 +330,23 @@
         let context = [];
         let isLoading = false;
         let currentAssistantMessage = null;
+
+        function getApiPrefix() {
+            return apiPrefixInput.value.trim();
+        }
+
+        function saveApiPrefix() {
+            const prefix = getApiPrefix();
+            localStorage.setItem('ez_agent_api_prefix', prefix);
+            addMessage('system', `API 前缀已保存: ${prefix || '(空)'}`);
+        }
+
+        function loadApiPrefix() {
+            const saved = localStorage.getItem('ez_agent_api_prefix');
+            if (saved !== null) {
+                apiPrefixInput.value = saved;
+            }
+        }
 
         function addMessage(role, content, isStreaming = false) {
             const messageDiv = document.createElement('div');
@@ -337,7 +418,9 @@
             let assistantContent = '';
 
             try {
-                const response = await fetch('/interact', {
+                const prefix = getApiPrefix();
+                const endpoint = prefix ? `${prefix.replace(/\/$/, '')}/interact` : '/interact';
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -392,6 +475,7 @@
         }
 
         context = [];
+        loadApiPrefix();
         autoResizeTextarea();
         userInput.focus();
     </script>

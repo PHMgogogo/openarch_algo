@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 import json
+from typing_extensions import TypedDict
 
 EXECUTE_OUTPUT_MAX_LEN = 10240
 
@@ -49,11 +50,17 @@ class LLMConfig:
 LLMConfig.instance = LLMConfig()
 
 
-Context: TypeAlias = list[dict[str, str]]
+@dataclass
+class ContextItem(TypedDict):
+    role: Literal["user", "assistant", "system"]
+    content: str
+
+
+Context: TypeAlias = list[ContextItem]
 
 
 async def llm_response(
-    context: Context = [{"role": "user", "content": "hello"}],
+    context: Context = [ContextItem(role="user", content="hello")],
     extra_body: dict[str, Any] = {"thinking": {"type": "disabled"}},
     llm_config: LLMConfig = LLMConfig.instance,
 ) -> AsyncIterator[str]:
@@ -90,7 +97,7 @@ def add_context_to(
         context = []
     elif copy:
         context = context.copy()
-    context.append({"role": role, "content": content})
+    context.append(ContextItem(role=role, content=content))
     return context
 
 
@@ -118,11 +125,10 @@ def check_if_cmd(
     pattern: str = TOOL_INVOKE_PATTERN,
 ) -> list[MatchGroup]:
     try:
-        if output.startswith("```ezcli"):
+        if output.strip().startswith("```"):
             return []
-        if not output.strip().endswith(
-            "</ez-agent-tool>"
-        ) or not output.strip().startswith("<ez-agent-tool>"):
+        if not output.strip().endswith("</ez-agent-tool>"):
+            # or not output.strip().startswith("<ez-agent-tool>"):
             return []
         matches = list(re.finditer(pattern, output, re.DOTALL))
         if not matches:
@@ -139,114 +145,98 @@ def check_if_cmd(
         return []
 
 
-class HeadlessConsole:
-    def print(*args, **kwargs):
-        pass
-
-
-class HeadlessLive:
-    console = HeadlessConsole
-
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc, tb):
-        pass
-
-    def update(self, *args, **kwargs):
-        pass
-
-    def console(self, *args, **kwargs):
-        pass
-
-
-async def _single_progress(
-    user_input: str, context: Context = None, headless: bool = False
-):
-    if not headless:
-        live = Live(refresh_per_second=25)
-    else:
-        live = HeadlessLive()
-    refresh = False
-    rewritable_output: str = ""
-    renderable_output: str = ""
+async def _single_progress(user_input: str, context: Context = None):
+    dump = True
     context = add_context_to(context, "user", user_input)
-    if headless:
-        yield "", True, context
+    yield "", True, context
+    renderable_output: str = ""
     while True:
+        rewritable_output: str = ""
+        system_output: str = ""
         should_response_again: bool = False
-        with live:
-            async for delta in llm_response(context):
-                rewritable_output += delta
-                renderable_output += delta
-                cic = check_if_cmd(rewritable_output)
-                if len(cic) <= 0:
-                    pass
-                else:
+        async for delta in llm_response(context):
+            rewritable_output += delta
+            renderable_output += delta
+            cic = check_if_cmd(rewritable_output)
+            if len(cic) <= 0:
+                pass
+            else:
+                should_response_again = True
+                raw_cmd = cic[0].match_group_1
+
+                cmd = cic[0].match_group_1.replace("ezcli", "python client.py")
+                rewritable_output = rewritable_output[: cic[0].match_group_start]
+                render_cic = check_if_cmd(renderable_output)
+                if len(render_cic) > 0:
+                    renderable_output = renderable_output[
+                        : render_cic[0].match_group_start
+                    ]
+
+                renderable_output += f"**已调用** `{raw_cmd}`\n"
+                rewritable_output += f"**已调用** `{raw_cmd}`\n"
+                if not raw_cmd.startswith("ezcli"):
+                    rewritable_output = "错误的命令调用：没有以ezcli开头"
                     should_response_again = True
-                    raw_cmd = cic[0].match_group_1
-                    cmd = cic[0].match_group_1.replace("ezcli", "python client.py")
-                    rewritable_output = rewritable_output[: cic[0].match_group_start]
-                    render_cic = check_if_cmd(renderable_output)
-                    if len(render_cic) > 0:
-                        renderable_output = renderable_output[
-                            : check_if_cmd(renderable_output)[0].match_group_start
-                        ]
-                    renderable_output += f"已调用 `{raw_cmd}`\n"
-                    process_result = subprocess.run(
-                        cmd,
-                        text=True,
-                        shell=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                    )
-                    if process_result.returncode == 0:
-                        rewritable_output += f"\n```{raw_cmd}\n"
-                        if process_result.stdout is not None:
-                            rewritable_output += process_result.stdout[
-                                -EXECUTE_OUTPUT_MAX_LEN:
-                            ]
-                        rewritable_output += "```\n"
-                    else:
-                        rewritable_output += f"\n```{raw_cmd}\n"
-                        if process_result.stderr is not None:
-                            rewritable_output += process_result.stderr[
-                                -EXECUTE_OUTPUT_MAX_LEN:
-                            ]
-                        rewritable_output += "```\n"
-                live.update(
-                    # re.sub(NO_RENDER_PATTERN, "", rewritable_output, flags=re.DOTALL),
-                    renderable_output,
-                    refresh=refresh,
-                )
-                if headless:
-                    yield renderable_output, False, context
-                if should_response_again:
                     break
+                env = os.environ.copy()
+                env.update({"PYTHONENCODING": "utf-8", "PYTHONUTF8": "1"})
+                proc = await asyncio.create_subprocess_shell(
+                    cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+                stdout_data, stderr_data = await proc.communicate()
+                if proc.returncode == 0:
+                    system_output += f"\n```{raw_cmd}\n"
+                    if stdout_data is not None:
+                        stdout_str = stdout_data.decode("utf-8")
+                        system_output += stdout_str[-EXECUTE_OUTPUT_MAX_LEN:]
+                    system_output += "```\n"
+                else:
+                    system_output += f"\n```{raw_cmd}\n"
+                    if stderr_data is not None:
+                        stderr_str = stderr_data.decode("utf-8")
+                        system_output += stderr_str[-EXECUTE_OUTPUT_MAX_LEN:]
+                    system_output += "```\n"
+            yield renderable_output, False, context
+            if should_response_again:
+                break
         context = add_context_to(context, "assistant", rewritable_output)
+        yield "", True, context
         if should_response_again:
             context = add_context_to(
                 context,
                 "system",
-                f"你的上一次工具调用已被替换成了调用结果，如果你认为足以回答问题，你应该不再调用工具，直接回答问题，否则你可以继续调用工具",
+                f"{system_output}你的上一次工具调用结果如上，如果你认为足以回答问题，你应该不再调用工具，直接回答问题，否则你可以继续调用工具",
             )
-        if headless:
-            yield "", True, context
         if not should_response_again:
             break
+    if dump:
+        with open("dump.md", "w", encoding="utf-8") as f:
+            for item in context:
+                f.write(f"# {item['role']}\n")
+                f.write(item["content"])
+                f.write("\n")
     return
 
 
 async def single_progress(user_input: str, context: Context = None) -> None:
-    await single_progress(user_input=user_input, context=context)
+    live = Live(refresh_per_second=25)
+    with live:
+        async for output, need_print, context in _single_progress(
+            user_input=user_input, context=context
+        ):
+            if not need_print:
+                live.update(output, refresh=True)
+            # elif context[-1]["role"] == "assistant":
+            #     live.console.print(context[-1]["content"])
 
 
 async def single_progress_headless(
     user_input: str, context: Context = None
 ) -> AsyncIterator[tuple[str, bool, Context]]:
-    async for item in _single_progress(
-        user_input=user_input, context=context, headless=True
-    ):
+    async for item in _single_progress(user_input=user_input, context=context):
         yield item
 
 

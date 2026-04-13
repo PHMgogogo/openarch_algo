@@ -126,11 +126,13 @@
 
         .modal-content {
             background-color: white;
-            margin: 5% auto;
-            padding: 20px;
+            margin: 3% auto;
+            padding: 15px 20px;
             border-radius: 8px;
             width: 90%;
             max-width: 600px;
+            max-height: 85vh;
+            overflow-y: auto;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
@@ -147,13 +149,24 @@
         }
 
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 12px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .form-row .form-group {
+            margin-bottom: 0;
         }
 
         label {
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
             font-weight: 500;
+            font-size: 14px;
         }
 
         label.inline {
@@ -171,7 +184,7 @@
         select,
         textarea {
             width: 100%;
-            padding: 8px;
+            padding: 6px 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
@@ -289,6 +302,7 @@
                     <th>重写主机</th>
                     <th>超时</th>
                     <th>文件根路径</th>
+                    <th>默认入口</th>
                     <th>状态</th>
                     <th>操作</th>
                 </tr>
@@ -308,17 +322,18 @@
             <h2 id="modal-title">添加代理规则</h2>
 
             <form id="rule-form">
-                <div class="form-group">
-                    <label for="rule-name">规则名称:</label>
-                    <input type="text" id="rule-name" required pattern="^[A-Za-z0-9_-]+$" oninput="testRule()">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="rule-name">规则名称:</label>
+                        <input type="text" id="rule-name" required pattern="^[A-Za-z0-9_-]+$" oninput="testRule()">
+                    </div>
+                    <div class="form-group">
+                        <label for="rule-order">优先级:</label>
+                        <input type="number" id="rule-order" value="-1" oninput="testRule()">
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="rule-order">优先级:</label>
-                    <input type="number" id="rule-order" value="-1" oninput="testRule()">
-                </div>
-
-                <div class="form-group">
+                <div class="form-group" style="margin-top: 12px;">
                     <label for="rule-type">匹配类型:</label>
                     <select id="rule-type" onchange="testRule()">
                         <option value="EXACT">精确匹配 (EXACT)</option>
@@ -332,32 +347,42 @@
                     <input type="text" id="rule-pattern" required oninput="testRule()">
                 </div>
 
-                <div class="form-group">
-                    <label for="rule-dest-index">目标索引 (匹配组):</label>
-                    <input type="text" id="rule-dest-index" placeholder="0,1 (逗号分隔的数字), 留空表示不提取" oninput="testRule()">
-                    <small style="color: #666; display: block; margin-top: 2px;">指定从匹配结果中提取哪些组作为目标URL的参数，留空表示不提取</small>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="rule-dest-index">目标索引 (匹配组):</label>
+                        <input type="text" id="rule-dest-index" placeholder="0,1" oninput="testRule()">
+                        <small style="color: #666; display: block; margin-top: 2px;">逗号分隔，留空不提取</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="rule-dest-format">目标格式:</label>
+                        <input type="text" id="rule-dest-format" placeholder="%s" required oninput="testRule()"
+                            value="%s">
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="rule-dest-format">目标格式:</label>
-                    <input type="text" id="rule-dest-format" placeholder="%s" required oninput="testRule()" value="%s">
+                <div class="form-row" style="margin-top: 12px;">
+                    <div class="form-group">
+                        <label for="rule-rewrite-host">重写主机 (可选):</label>
+                        <input type="text" id="rule-rewrite-host" placeholder="backend-service.com"
+                            oninput="testRule()">
+                    </div>
+                    <div class="form-group">
+                        <label for="rule-timeout">超时 (秒，可选):</label>
+                        <input type="number" id="rule-timeout" step="0.1" min="0" oninput="testRule()">
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="rule-rewrite-host">重写主机 (可选):</label>
-                    <input type="text" id="rule-rewrite-host" placeholder="backend-service.com" oninput="testRule()">
-                </div>
-
-                <div class="form-group">
-                    <label for="rule-timeout">超时时间 (秒，可选):</label>
-                    <input type="number" id="rule-timeout" step="0.1" min="0" oninput="testRule()">
-                </div>
-
-                <div class="form-group">
+                <div class="form-group" style="margin-top: 12px;">
                     <label for="rule-file-serve-root-path">文件服务根路径 (可选):</label>
                     <input type="text" id="rule-file-serve-root-path" placeholder="/path/to/root" oninput="testRule()">
                     <small
-                        style="color: #666; display: block; margin-top: 2px;">设置此项后，匹配的GET请求将从该路径下提供静态文件服务，而非反向代理</small>
+                        style="color: #666; display: block; margin-top: 2px;">设置后，匹配的GET请求将从该路径提供静态文件服务，而非反向代理</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="rule-default-entrance">默认入口路径 (可选):</label>
+                    <input type="text" id="rule-default-entrance" placeholder="/index.html">
+                    <small style="color: #666; display: block; margin-top: 2px;">设置后，规则列表会显示跳转链接直接访问代理后的默认入口</small>
                 </div>
 
                 <div class="form-group">
@@ -367,17 +392,20 @@
                     </label>
                 </div>
 
-                <div class="form-group">
-                    <label for="test-path">测试路径:</label>
-                    <input type="text" id="test-path" placeholder="输入路径进行测试" value="/test" oninput="testRule()">
+                <div class="form-row" style="margin-top: 12px;">
+                    <div class="form-group">
+                        <label for="test-path">测试路径:</label>
+                        <input type="text" id="test-path" placeholder="输入路径进行测试" value="/test" oninput="testRule()">
+                    </div>
+                    <div class="form-group">
+                        <label for="test-host">测试主机:</label>
+                        <input type="text" id="test-host" placeholder="留空使用当前域名" oninput="testRule()">
+                        <small style="color: #666; display: block; margin-top: 2px;"
+                            id="test-host-hint">留空用当前页面主机</small>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="test-host">测试主机:</label>
-                    <input type="text" id="test-host" placeholder="留空使用当前域名" oninput="testRule()">
-                    <small style="color: #666; display: block; margin-top: 2px;"
-                        id="test-host-hint">留空将使用当前页面的主机</small>
-                </div>
-                <div class="form-group">
+
+                <div class="form-group" style="margin-top: 12px;">
                     <div class="preview-result" id="test-result">输入测试路径后将自动显示测试结果</div>
                 </div>
 
@@ -419,9 +447,12 @@
             tbody.innerHTML = '';
 
             if (rules.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center;">暂无规则</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align: center;">暂无规则</td></tr>';
                 return;
             }
+
+            const currentProtocol = location.protocol;
+            const currentHost = location.host;
 
             rules.forEach(rule => {
                 const row = document.createElement('tr');
@@ -439,6 +470,13 @@
                     ruleTypeText = '正则';
                 }
 
+                let defaultEntranceCell = '-';
+                if (rule.default_entrance) {
+                    const fullUrl = `${rule.default_entrance}`;
+                    defaultEntranceCell = `<a href="${fullUrl}" target="_blank">${rule.default_entrance}</a>`;
+                }
+
+
                 row.innerHTML = `
                     <td>${rule.name}</td>
                     <td>${rule.order}</td>
@@ -449,6 +487,7 @@
                     <td>${rule.rewrite_host || '-'}</td>
                     <td>${rule.timeout || '-'}</td>
                     <td>${rule.file_serve_root_path || '-'}</td>
+                    <td>${defaultEntranceCell}</td>
                     <td><span class="status-${rule.enable ? 'enabled' : 'disabled'}">${rule.enable ? '启用' : '禁用'}</span></td>
                     <td>
                         ${rule.editable ? `
@@ -490,6 +529,7 @@
             document.getElementById('rule-rewrite-host').value = rule.rewrite_host || '';
             document.getElementById('rule-timeout').value = rule.timeout || '';
             document.getElementById('rule-file-serve-root-path').value = rule.file_serve_root_path || '';
+            document.getElementById('rule-default-entrance').value = rule.default_entrance || '';
             document.getElementById('rule-enable').checked = rule.enable;
             document.getElementById('submit-btn').textContent = '更新规则';
             document.getElementById('rule-modal').style.display = 'block';
@@ -522,6 +562,7 @@
                 rewrite_host: document.getElementById('rule-rewrite-host').value || null,
                 timeout: document.getElementById('rule-timeout').value ? parseFloat(document.getElementById('rule-timeout').value) : null,
                 file_serve_root_path: document.getElementById('rule-file-serve-root-path').value || null,
+                default_entrance: document.getElementById('rule-default-entrance').value || null,
                 enable: document.getElementById('rule-enable').checked
             };
 
@@ -573,6 +614,7 @@
                     rewrite_host: document.getElementById('rule-rewrite-host').value || null,
                     timeout: document.getElementById('rule-timeout').value ? parseFloat(document.getElementById('rule-timeout').value) : null,
                     file_serve_root_path: document.getElementById('rule-file-serve-root-path').value || null,
+                    default_entrance: document.getElementById('rule-default-entrance').value || null,
                     enable: document.getElementById('rule-enable').checked
                 };
 
