@@ -528,13 +528,6 @@ def _get_type_converter(type_hint):
     return str
 
 
-def _get_current_class(root_module, command_path: list[str]) -> Any:
-    current = root_module
-    for part in command_path:
-        current = getattr(current, part)
-    return current
-
-
 def get_parser(prog: str = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=prog, description="OpenArch Algo API Command Line Client"

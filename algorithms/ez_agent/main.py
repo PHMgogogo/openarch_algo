@@ -1,14 +1,13 @@
 from __future__ import annotations
 import urllib.request
-from typing import Any, TypeAlias, Literal, AsyncIterator
+from typing import Any, TypeAlias, Literal, AsyncGenerator
 import os
 from dotenv import load_dotenv
 import openai
 import asyncio
-import re
 from dataclasses import dataclass
-import subprocess
 from rich.live import Live
+from rich.markdown import Markdown
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
@@ -33,7 +32,6 @@ def dynamic_load_client(
 
 
 dynamic_load_client()
-
 import client
 
 
@@ -52,18 +50,52 @@ LLMConfig.instance = LLMConfig()
 
 @dataclass
 class ContextItem(TypedDict):
-    role: Literal["user", "assistant", "system"]
+    role: Literal["user", "assistant", "system", "tool"]
     content: str
+    tool_name: str | None = None
+    tool_call_id: str | None = None
 
 
 Context: TypeAlias = list[ContextItem]
+
+
+class EzcliParams(BaseModel):
+    args: str = "-h"
+
+
+class OpenAITool(BaseModel):
+    type: Literal["function"] = "function"
+    function: openai.types.FunctionDefinition
+
+
+class Function(BaseModel):
+    arguments: dict | str | None = None
+    name: str | None = None
+    tool_call_id: str | None = None
+
+
+class ToolCall(BaseModel):
+    index: int | None = 0
+    id: str | None = None
+    function: Function
+    type: Literal["function"] = "function"
+
+
+tool = OpenAITool(
+    function=openai.types.FunctionDefinition(
+        name="ezcli",
+        description="ezcli",
+        parameters=EzcliParams().model_json_schema(),
+        strict=True,
+    )
+)
 
 
 async def llm_response(
     context: Context = [ContextItem(role="user", content="hello")],
     extra_body: dict[str, Any] = {"thinking": {"type": "disabled"}},
     llm_config: LLMConfig = LLMConfig.instance,
-) -> AsyncIterator[str]:
+) -> AsyncGenerator[str | Function, None]:
     client = openai.AsyncOpenAI(
         api_key=llm_config.api_key, base_url=llm_config.base_url
     )
@@ -73,31 +105,49 @@ async def llm_response(
         messages=context,
         stream=True,
         extra_body=extra_body,
+        tools=[tool.model_dump()],
+        tool_choice="auto",
     )
-
+    tool_call_result = dict[int, Function]()
     async for chunk in stream:
-        if chunk.choices:
-            delta = chunk.choices[0].delta
-            if delta.content is not None:
-                yield delta.content
-
-
-async def test():
-    async for content in llm_response():
-        print(content, end="")
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta
+        if delta.tool_calls is not None and len(delta.tool_calls) > 0:
+            for item in delta.tool_calls:
+                item: ToolCall = item
+                if item.index not in tool_call_result:
+                    tool_call_result[item.index] = Function(
+                        name=item.function.name,
+                        arguments=item.function.arguments,
+                        tool_call_id=item.id,
+                    )
+                else:
+                    if item.function.name != None:
+                        tool_call_result[item.index].name += item.function.name
+                    tool_call_result[item.index].arguments += item.function.arguments
+        elif delta.content:
+            yield delta.content
+        else:
+            for fn in tool_call_result.values():
+                fn.arguments = json.loads(fn.arguments)
+            yield list(tool_call_result.values())
 
 
 def add_context_to(
     context: Context = None,
-    role: str = Literal["system", "assistant", "user"],
+    role: str = Literal["system", "assistant", "user", "tool"],
     content: str = "",
+    tool_call_id: str = None,
     copy: bool = False,
 ) -> Context:
     if context is None:
         context = []
     elif copy:
         context = context.copy()
-    context.append(ContextItem(role=role, content=content))
+    citem = ContextItem(role=role, content=content)
+    citem["tool_call_id"] = tool_call_id
+    context.append(citem)
     return context
 
 
@@ -109,107 +159,65 @@ def load_prompt_to(
     return add_context_to(context, "system", prompt)
 
 
-@dataclass
-class MatchGroup:
-    match_group_1: str
-    match_group_start: int
-    match_group_end: int
-
-
-TOOL_INVOKE_PATTERN = r"<ez-agent-tool>([\s\S]*?)</ez-agent-tool>"
-NO_RENDER_PATTERN = r"```ezcli(.*?)```"
-
-
-def check_if_cmd(
-    output: str,
-    pattern: str = TOOL_INVOKE_PATTERN,
-) -> list[MatchGroup]:
-    try:
-        if output.strip().startswith("```"):
-            return []
-        if not output.strip().endswith("</ez-agent-tool>"):
-            # or not output.strip().startswith("<ez-agent-tool>"):
-            return []
-        matches = list(re.finditer(pattern, output, re.DOTALL))
-        if not matches:
-            return []
-        return [
-            MatchGroup(
-                match_group_1=match.group(1).strip(),
-                match_group_start=match.start(),
-                match_group_end=match.end(),
-            )
-            for match in matches
-        ]
-    except:
-        return []
-
-
-async def _single_progress(user_input: str, context: Context = None):
+async def _single_progress(
+    user_input: str, context: Context = None
+) -> AsyncGenerator[tuple[str, str, Context], None]:
     dump = True
     context = add_context_to(context, "user", user_input)
-    yield "", True, context
-    renderable_output: str = ""
+    yield None, None, context
+    output_str: str = ""
     while True:
-        rewritable_output: str = ""
-        system_output: str = ""
+        tool_output: str = ""
+        delta_str: str = ""
         should_response_again: bool = False
         async for delta in llm_response(context):
-            rewritable_output += delta
-            renderable_output += delta
-            cic = check_if_cmd(rewritable_output)
-            if len(cic) <= 0:
-                pass
-            else:
-                should_response_again = True
-                raw_cmd = cic[0].match_group_1
-
-                cmd = cic[0].match_group_1.replace("ezcli", "python client.py")
-                rewritable_output = rewritable_output[: cic[0].match_group_start]
-                render_cic = check_if_cmd(renderable_output)
-                if len(render_cic) > 0:
-                    renderable_output = renderable_output[
-                        : render_cic[0].match_group_start
-                    ]
-
-                renderable_output += f"**已调用** `{raw_cmd}`\n"
-                rewritable_output += f"**已调用** `{raw_cmd}`\n"
-                if not raw_cmd.startswith("ezcli"):
-                    rewritable_output = "错误的命令调用：没有以ezcli开头"
+            if isinstance(delta, list):
+                for func in delta:
+                    if not isinstance(func, Function) or not func.name == "ezcli":
+                        continue
+                    args = EzcliParams.model_validate(func.arguments).args
                     should_response_again = True
-                    break
-                env = os.environ.copy()
-                env.update({"PYTHONENCODING": "utf-8", "PYTHONUTF8": "1"})
-                proc = await asyncio.create_subprocess_shell(
-                    cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
-                stdout_data, stderr_data = await proc.communicate()
-                if proc.returncode == 0:
-                    system_output += f"\n```{raw_cmd}\n"
-                    if stdout_data is not None:
-                        stdout_str = stdout_data.decode("utf-8")
-                        system_output += stdout_str[-EXECUTE_OUTPUT_MAX_LEN:]
-                    system_output += "```\n"
-                else:
-                    system_output += f"\n```{raw_cmd}\n"
-                    if stderr_data is not None:
-                        stderr_str = stderr_data.decode("utf-8")
-                        system_output += stderr_str[-EXECUTE_OUTPUT_MAX_LEN:]
-                    system_output += "```\n"
-            yield renderable_output, False, context
+                    raw_cmd = func.name + " " + args
+                    cmd = "python client.py " + args
+                    invoked_str = f"\n**已调用** `{raw_cmd}`\n\n"
+                    delta_str = invoked_str
+                    output_str += delta_str
+                    env = os.environ.copy()
+                    env.update({"PYTHONENCODING": "utf-8", "PYTHONUTF8": "1"})
+                    proc = await asyncio.create_subprocess_shell(
+                        cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        env=env,
+                    )
+                    stdout_data, stderr_data = await proc.communicate()
+                    if proc.returncode == 0:
+                        # tool_output += f"\n```{raw_cmd}\n"
+                        if stdout_data is not None:
+                            stdout_str = stdout_data.decode("utf-8")
+                            tool_output += stdout_str[-EXECUTE_OUTPUT_MAX_LEN:]
+                        # tool_output += "```\n"
+                    else:
+                        tool_output += f"\n```{raw_cmd}\n"
+                        if stderr_data is not None:
+                            stderr_str = stderr_data.decode("utf-8")
+                            tool_output += stderr_str[-EXECUTE_OUTPUT_MAX_LEN:]
+                        tool_output += "```\n"
+                    add_context_to(
+                        context,
+                        "tool",
+                        tool_output,
+                        func.tool_call_id,
+                    )
+                    add_context_to(context, "system", "继续")
+            else:
+                delta_str = delta
+                output_str += delta_str
+                yield output_str, delta_str, context
             if should_response_again:
                 break
-        context = add_context_to(context, "assistant", rewritable_output)
-        yield "", True, context
-        if should_response_again:
-            context = add_context_to(
-                context,
-                "system",
-                f"{system_output}你的上一次工具调用结果如上，如果你认为足以回答问题，你应该不再调用工具，直接回答问题，否则你可以继续调用工具",
-            )
+        context = add_context_to(context, "assistant", output_str)
+        yield None, None, context
         if not should_response_again:
             break
     if dump:
@@ -222,22 +230,22 @@ async def _single_progress(user_input: str, context: Context = None):
 
 
 async def single_progress(user_input: str, context: Context = None) -> None:
-    live = Live(refresh_per_second=25)
+    live = Live(refresh_per_second=20)
     with live:
-        async for output, need_print, context in _single_progress(
+        async for output, delta, context in _single_progress(
             user_input=user_input, context=context
         ):
-            if not need_print:
-                live.update(output, refresh=True)
-            # elif context[-1]["role"] == "assistant":
-            #     live.console.print(context[-1]["content"])
+            if output:
+                live.update(Markdown(output))
+            else:
+                pass
+
+        # elif context[-1]["role"] == "assistant":
+        #     live.console.print(context[-1]["content"])
 
 
-async def single_progress_headless(
-    user_input: str, context: Context = None
-) -> AsyncIterator[tuple[str, bool, Context]]:
-    async for item in _single_progress(user_input=user_input, context=context):
-        yield item
+def single_progress_headless(user_input: str, context: Context = None):
+    return _single_progress(user_input=user_input, context=context)
 
 
 async def cli():
@@ -267,10 +275,10 @@ async def interact(i_request: InteractRequest):
         i_request.context = load_prompt_to(ezcli_doc=client.doc("ezcli"))
 
     async def generator():
-        async for output, ctx_change, ctx in single_progress_headless(
+        async for output, delta, ctx in single_progress_headless(
             i_request.user_input, i_request.context
         ):
-            payload = ctx if ctx_change else {"output": output}
+            payload = ctx if not output else {"output": output}
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(generator(), media_type="text/event-stream")

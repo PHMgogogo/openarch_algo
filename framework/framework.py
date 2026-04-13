@@ -5,6 +5,9 @@ import pandas as pd
 import typing
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import inspect
+from dataclasses import dataclass
+from pydantic import BaseModel
 
 
 class TableByRowDataset(Dataset):
@@ -56,7 +59,20 @@ class TableByRowDataset(Dataset):
         self._cache.clear()
 
 
-# <model-define>
+class ModelResult(BaseModel):
+    def code(self) -> str:
+        return inspect.getsource(self.__class__)
+
+
+# <result-content>
+class LossModelResult(ModelResult):
+    loss: float
+
+
+# <result-content>
+
+
+# <model-content>
 class Model(nn.Module):
     def __init__(self, input_size: int = 1, hidden_size: int = 4, output_size: int = 1):
         super().__init__()
@@ -72,9 +88,9 @@ class Model(nn.Module):
         return self.layers(x)
 
 
-# </model-define>
+# </model-content>
 
-
+# <train-or-eval-content>
 def train_or_eval(
     model: Model,
     data: torch.utils.data.Dataset,
@@ -86,7 +102,7 @@ def train_or_eval(
     criterion_cls: nn.Module = nn.MSELoss,
     optimizer_cls: torch.optim.Optimizer = torch.optim.SGD,
     progress: bool = True,
-) -> list[float]:
+) -> list[ModelResult]:
     train = mode == "train"
     if train:
         criterion: nn.Module = criterion_cls()
@@ -99,7 +115,7 @@ def train_or_eval(
     optimizer: torch.optim.Optimizer = optimizer_cls(model.parameters(), learning_rate)
     model = model.to(device)
     data_loader = torch.utils.data.DataLoader(data, batch_size, shuffle=True)
-    avg_loss_per_epoch: list[float] = []
+    avg_loss_per_epoch: list[LossModelResult] = []
     for ep in tqdm(range(epoch), disable=not progress):
         total_loss = 0
         for batch_data, batch_labels in data_loader:
@@ -114,13 +130,13 @@ def train_or_eval(
                 optimizer.step()
             total_loss += loss.item()
         avg_loss = total_loss / len(data)
-        avg_loss_per_epoch.append(avg_loss)
+        avg_loss_per_epoch.append(LossModelResult(data=avg_loss))
         if progress:
             tqdm.write(f"Epoch {ep}: Loss {avg_loss}")
     if not train:
         torch_no_grad.__exit__(None, None, None)
     return avg_loss_per_epoch
-
+# </train-or-eval-content>
 
 def split_dataset(
     dataset: Dataset,
@@ -151,6 +167,7 @@ def split_dataloader(
 
 
 if __name__ == "__main__":
+    # <main-content>
     model = Model()
     dataset = TableByRowDataset("../example/sqrt.csv", ["y"]).warmup("cuda:0")
     generator = torch.Generator()
@@ -158,7 +175,7 @@ if __name__ == "__main__":
     train_result = train_or_eval(
         model, train_dataset, "train", epoch=30, batch_size=10, device="cuda:0"
     )
-
+    print(train_result[-1].model_dump_json())
     model.eval()
     x_list = []
     pred_list = []
@@ -181,3 +198,4 @@ if __name__ == "__main__":
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.savefig("output.png")
+    # </main-content>
