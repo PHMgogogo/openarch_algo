@@ -5,17 +5,49 @@ from config import Config
 import zipfile
 from datetime import datetime
 from algorithms.openarch_gateway.entity import UrlProxyRule
+import uuid
 
 
 def unsafe_peek(stream_reader: asyncio.StreamReader) -> int:
-    if stream_reader._buffer:
+    if stream_reader and stream_reader._buffer:
         return len(stream_reader._buffer)
     return -1
+
+
+class AsyncIOWrapper:
+    output: bytearray
+    output_ready: asyncio.Event
+    MAX_OUTPUT_LENGTH: int = 20480
+    _task: asyncio.Task
+    id: str
+
+    def __init__(self, id: str = None):
+        self.output = bytearray()
+        self.output_ready = asyncio.Event()
+        self.id = str(uuid.uuid4())
+
+    async def read(self) -> bytes:
+        await self.output_ready
+        _output = self.output.copy()
+        self.output.clear()
+        self.output_ready.clear()
+        return _output
+
+    async def read_from_proc(self, data: bytes) -> None:
+        self.output.extend(data)
+        self.output = self.output[-self.MAX_OUTPUT_LENGTH :]
+        self.output_ready.set()
+
+    async def write_to_proc(
+        self, proc: asyncio.subprocess.Process, data: bytes
+    ) -> None:
+        await proc.stdin.write(data)
 
 
 class ProcessManager:
     instances: dict[str, Instance] = None
     processes: dict[str, dict[str, asyncio.subprocess.Process]] = None
+    iowrappers: dict[str, dict[str, dict[str, AsyncIOWrapper]]] = None
 
     def __init__(self):
         self.processes = dict[str, dict[str, asyncio.subprocess.Process]]()
@@ -86,8 +118,10 @@ class ProcessManager:
         process = await asyncio.create_subprocess_exec(
             *entrys,
             cwd=instance.path,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            # stderr=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
         )
         self.processes[id]["0"] = process
@@ -132,7 +166,7 @@ class ProcessManager:
                     self.instances[iid].status = InstanceStatus.EXITED
                 await self.instances[iid].log.flush_all()
 
-    async def watch_loop(self, interval: float = 0.1):
+    async def watch_loop(self, interval: float = 0.04):
         while True:
             try:
                 await asyncio.sleep(interval)
