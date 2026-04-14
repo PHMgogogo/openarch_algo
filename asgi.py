@@ -1,11 +1,11 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import asyncio
 from contextlib import asynccontextmanager
-from manager import ProcessManager
+from manager import ProcessManager, AsyncIOWrapper
 from entity import Template, Algorithm
 from algorithms.openarch_gateway.entity import UrlProxyRule
 
@@ -258,6 +258,38 @@ async def stop_instance(instance_id: str, force: bool = False):
 async def delete_instance(instance_id: str, force: bool = False):
     await pm.remove_instance(instance_id, force)
     return {"message": "Instance deleted"}
+
+
+async def attach_ws_recv_loop(instance_id: str, websocket: WebSocket):
+    while True:
+        data = await websocket.receive_bytes()
+        await pm.write_to_proc(instance_id, data)
+
+
+async def attach_ws_send_loop(
+    instance_id: str, iowrapper_id: str, websocket: WebSocket
+):
+    while True:
+        data = await pm.iowrappers[instance_id]["0"][iowrapper_id].read()
+        await websocket.send_bytes(data)
+
+
+@app.websocket("/instances/{instance_id}/attach/{iowrapper_id}")
+async def attach_instance(instance_id: str, iowrapper_id: str, websocket: WebSocket):
+    iid = pm.get_instance(instance_id).id
+    if not iowrapper_id in pm.iowrappers[iid]["0"]:
+        pm.iowrappers[iid]["0"][iowrapper_id] = AsyncIOWrapper(iowrapper_id)
+    await websocket.accept()
+    await asyncio.gather(
+        attach_ws_recv_loop(instance_id, websocket),
+        attach_ws_send_loop(instance_id, iowrapper_id, websocket),
+    )
+    return
+
+
+@app.get("/console")
+async def get_console():
+    return FileResponse("console.html")
 
 
 @app.get("{path:path}")

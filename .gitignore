@@ -16,3 +16,4 @@ templates/*
 __pycache__
 .vscode
 rules.json.lock
+dump.md

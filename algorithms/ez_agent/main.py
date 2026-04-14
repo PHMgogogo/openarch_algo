@@ -52,7 +52,6 @@ LLMConfig.instance = LLMConfig()
 class ContextItem(TypedDict):
     role: Literal["user", "assistant", "system", "tool"]
     content: str
-    tool_name: str | None = None
     tool_call_id: str | None = None
 
 

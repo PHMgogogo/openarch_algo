@@ -328,6 +328,7 @@ class Instance:
                 service.delete(rule.name)
             except:
                 pass
+
         if self.template.volume:
             await unlink_dir_platform(self.path)
         else:
