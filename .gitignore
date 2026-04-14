@@ -11,6 +11,8 @@ instances
 logs
 templates/*
 !templates/yolo_http_server.json
+!templates/ez_agent.json
+!templates/gateway.json
 __pycache__
 .vscode
 rules.json.lock
