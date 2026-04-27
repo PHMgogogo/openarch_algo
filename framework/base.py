@@ -1,4 +1,5 @@
 from torch import nn
+from torch import optim
 import torch
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
@@ -6,8 +7,9 @@ import typing
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import inspect
-from dataclasses import dataclass
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+import os
+from contextlib import nullcontext
 
 
 class TableByRowDataset(Dataset):
@@ -74,14 +76,14 @@ class LossModelResult(ModelResult):
 
 # <model-content>
 class Model(nn.Module):
-    def __init__(self, input_size: int = 1, hidden_size: int = 4, output_size: int = 1):
+    def __init__(self):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
+            nn.Linear(1, 4),
             nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(4, 4),
             nn.ReLU(),
-            nn.Linear(hidden_size, output_size),
+            nn.Linear(4, 1),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -89,6 +91,20 @@ class Model(nn.Module):
 
 
 # </model-content>
+
+
+class TrainOrEvalArgs(BaseModel):
+    epoch: int = 1
+    batch_size: int = 1
+    learning_rate: float = 1e-3
+    device: typing.Literal["cpu", "cuda"] | str = "cpu"
+    progress: bool = False
+    mode: typing.Literal["train", "eval"]
+
+
+class TrainArgs(TrainOrEvalArgs):
+    mode: typing.Literal["train"] = "train"
+
 
 # <train-or-eval-content>
 def train_or_eval(
@@ -99,44 +115,61 @@ def train_or_eval(
     batch_size: int = 1,
     learning_rate: float = 1e-3,
     device: str = "cpu",
-    criterion_cls: nn.Module = nn.MSELoss,
-    optimizer_cls: torch.optim.Optimizer = torch.optim.SGD,
+    criterion: nn.Module = None,
+    optimizer: optim.Optimizer = None,
     progress: bool = True,
+    epoch_callback: typing.Callable[..., None] = lambda *args, **kwargs: None,
+    batch_callback: typing.Callable[..., None] = lambda *args, **kwargs: None,
+    result_callback: typing.Callable[..., None] = lambda *args, **kwargs: None,
+    interrupt_signal: typing.Callable[[], bool] = lambda: True,
 ) -> list[ModelResult]:
+    model_result = []
     train = mode == "train"
     if train:
-        criterion: nn.Module = criterion_cls()
+        if criterion is None:
+            criterion = nn.MSELoss()
+        if optimizer is None:
+            optimizer = optim.SGD(model.parameters(), lr=learning_rate)
         model.train()
     else:
         epoch = 1
         model.eval()
-        torch_no_grad = torch.no_grad()
-        torch_no_grad.__enter__()
-    optimizer: torch.optim.Optimizer = optimizer_cls(model.parameters(), learning_rate)
+
     model = model.to(device)
     data_loader = torch.utils.data.DataLoader(data, batch_size, shuffle=True)
-    avg_loss_per_epoch: list[LossModelResult] = []
-    for ep in tqdm(range(epoch), disable=not progress):
-        total_loss = 0
-        for batch_data, batch_labels in data_loader:
-            batch_data = batch_data.to(device)
-            batch_labels = batch_labels.to(device)
-            if train:
-                optimizer.zero_grad()
-            outputs = model(batch_data)
-            loss: torch.Tensor = criterion(outputs, batch_labels)
-            if train:
-                loss.backward()
-                optimizer.step()
-            total_loss += loss.item()
-        avg_loss = total_loss / len(data)
-        avg_loss_per_epoch.append(LossModelResult(data=avg_loss))
-        if progress:
-            tqdm.write(f"Epoch {ep}: Loss {avg_loss}")
-    if not train:
-        torch_no_grad.__exit__(None, None, None)
-    return avg_loss_per_epoch
+    null_f = None if progress else open(os.devnull, "w")
+    epoch_progress = tqdm(range(epoch), file=null_f)
+    with torch.no_grad() if not train else nullcontext():
+        for ep in epoch_progress:
+            epoch_callback(**epoch_progress.format_dict)
+            total_loss = 0
+            batch_progress = tqdm(data_loader, file=null_f)
+            for batch_data, batch_labels in batch_progress:
+                if interrupt_signal():
+                    return model_result
+                batch_callback(**batch_progress.format_dict)
+                batch_data = batch_data.to(device)
+                batch_labels = batch_labels.to(device)
+                if train:
+                    optimizer.zero_grad()
+                outputs = model(batch_data)
+                loss: torch.Tensor = criterion(outputs, batch_labels)
+                if train:
+                    loss.backward()
+                    optimizer.step()
+                total_loss += loss.item()
+            avg_loss = total_loss / len(data)
+            r = LossModelResult(loss=avg_loss)
+            model_result.append(r)
+            result_callback(result=r)
+            batch_callback(**batch_progress.format_dict)
+            tqdm.write(f"Epoch {ep}: Loss {avg_loss}", null_f)
+    epoch_callback(**epoch_progress.format_dict)
+    result_callback(done=True)
+
+
 # </train-or-eval-content>
+
 
 def split_dataset(
     dataset: Dataset,
