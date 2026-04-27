@@ -12,3 +12,4 @@ filelock
 aiohttp
 uvicorn[standard]
 h2
+rich

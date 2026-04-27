@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>远程终端</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #1e1e1e;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #252526;
+            padding: 10px 20px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .header label {
+            color: #cccccc;
+            font-size: 14px;
+        }
+
+        .header input {
+            background: #3c3c3c;
+            border: 1px solid #555555;
+            color: #cccccc;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .header input:focus {
+            border-color: #007acc;
+        }
+
+        .header select {
+            background: #3c3c3c;
+            border: 1px solid #555555;
+            color: #cccccc;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .header select:focus {
+            border-color: #007acc;
+        }
+
+        .header button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .header button:hover {
+            background: #1177bb;
+        }
+
+        .header button.disconnect {
+            background: #a1260d;
+            display: none;
+        }
+
+        .header button.disconnect:hover {
+            background: #b52d0f;
+        }
+
+        .header .status {
+            margin-left: auto;
+            color: #858585;
+            font-size: 13px;
+        }
+
+        .header .status.connected {
+            color: #4ec9b0;
+        }
+
+        .header .status.disconnected {
+            color: #f48771;
+        }
+
+        #terminal-container {
+            flex: 1;
+            padding: 10px;
+            overflow: hidden;
+        }
+
+        #terminal-container .xterm {
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <label for="instance-id">实例ID:</label>
+        <input type="text" id="instance-id" placeholder="输入实例ID" />
+        <label for="wrapper-id">Wrapper ID:</label>
+        <input type="text" id="wrapper-id" value="0" placeholder="默认0" />
+        <label for="encoding">编码:</label>
+        <select id="encoding">
+            <option value="gbk">GBK</option>
+            <option value="utf-8">UTF-8</option>
+            <option value="gb2312">GB2312</option>
+            <option value="gb18030">GB18030</option>
+            <option value="big5">Big5</option>
+            <option value="latin1">Latin1</option>
+        </select>
+        <button id="connect-btn" onclick="connect()">连接</button>
+        <button id="disconnect-btn" class="disconnect" onclick="disconnect()">断开</button>
+        <span class="status" id="status">未连接</span>
+    </div>
+    <div id="terminal-container"></div>
+
+    <script>
+        const termContainer = document.getElementById('terminal-container');
+        const instanceIdInput = document.getElementById('instance-id');
+        const wrapperIdInput = document.getElementById('wrapper-id');
+        const encodingSelect = document.getElementById('encoding');
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const statusSpan = document.getElementById('status');
+
+        let term = null;
+        let fitAddon = null;
+        let socket = null;
+
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                instance: params.get('instance'),
+                wrapper: params.get('wrapper')
+            };
+        }
+
+        function initFromUrlParams() {
+            const params = getUrlParams();
+            if (params.instance) {
+                instanceIdInput.value = params.instance;
+            }
+            if (params.wrapper) {
+                wrapperIdInput.value = params.wrapper;
+            }
+        }
+
+        function getSelectedEncoding() {
+            return encodingSelect.value;
+        }
+
+        function getProtocol() {
+            return window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        }
+
+        function getWsUrl(instanceId, wrapperId) {
+            const protocol = getProtocol();
+            const host = window.location.host;
+            return `${protocol}//${host}/instances/${instanceId}/attach/${wrapperId}`;
+        }
+
+        function updateStatus(connected) {
+            if (connected) {
+                statusSpan.textContent = '已连接';
+                statusSpan.className = 'status connected';
+                connectBtn.style.display = 'none';
+                disconnectBtn.style.display = 'inline-block';
+                instanceIdInput.disabled = true;
+                wrapperIdInput.disabled = true;
+            } else {
+                statusSpan.textContent = '未连接';
+                statusSpan.className = 'status disconnected';
+                connectBtn.style.display = 'inline-block';
+                disconnectBtn.style.display = 'none';
+                instanceIdInput.disabled = false;
+                wrapperIdInput.disabled = false;
+            }
+        }
+
+        function connect() {
+            const instanceId = instanceIdInput.value.trim();
+            const wrapperId = wrapperIdInput.value.trim() || '0';
+
+            if (!instanceId) {
+                alert('请输入实例ID');
+                return;
+            }
+
+            if (!term) {
+                term = new Terminal({
+                    cursorBlink: true,
+                    convertEol: true,   // ✅ 很重要
+                    allowTransparency: true,
+                    theme: {
+                        background: '#1e1e1e',
+                        foreground: '#d4d4d4',
+                    },
+                    fontSize: 14,
+                    fontFamily: 'Consolas, "Courier New", monospace',
+                });
+                fitAddon = new FitAddon.FitAddon();
+                term.loadAddon(fitAddon);
+                term.open(termContainer);
+                fitAddon.fit();
+
+                window.addEventListener('resize', () => {
+                    fitAddon.fit();
+                });
+            }
+
+            try {
+                socket = new WebSocket(getWsUrl(instanceId, wrapperId));
+
+                socket.onopen = () => {
+                    updateStatus(true);
+                    term.focus();
+                };
+
+                socket.onclose = () => {
+                    updateStatus(false);
+                    term.writeln('\r\n[连接已关闭]');
+                };
+
+                socket.onerror = (error) => {
+                    console.error('WebSocket错误:', error);
+                    term.writeln('\r\n[WebSocket错误]');
+                };
+
+                socket.binaryType = 'arraybuffer';
+                socket.onmessage = (event) => {
+                    if (event.data instanceof ArrayBuffer) {
+                        const data = new Uint8Array(event.data);
+                        console.log(data)
+                        let output = '';
+
+                        for (let i = 0; i < data.length; i++) {
+                            if (data[i] === 127) {
+                                // 替换为 "\b \b"
+                                output += '\b \b';
+                            }
+                            else {
+                                output += String.fromCharCode(data[i]);
+                            }
+                        }
+                        term.write(output);
+                    }
+                };
+                term.onData((data) => {
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        const encoder = new TextEncoder();
+                        socket.send(encoder.encode(data));
+                    }
+                });
+            } catch (e) {
+                console.error('连接失败:', e);
+                alert('连接失败: ' + e.message);
+            }
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.close();
+                socket = null;
+            }
+            updateStatus(false);
+        }
+
+        updateStatus(false);
+        initFromUrlParams();
+    </script>
+</body>
+
+</html>

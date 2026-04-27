@@ -24,10 +24,12 @@ class AsyncIOWrapper:
     def __init__(self, id: str = None):
         self.output = bytearray()
         self.output_ready = asyncio.Event()
-        self.id = str(uuid.uuid4())
+        if id is None:
+            id = str(uuid.uuid4())
+        self.id = id
 
     async def read(self) -> bytes:
-        await self.output_ready
+        await self.output_ready.wait()
         _output = self.output.copy()
         self.output.clear()
         self.output_ready.clear()
@@ -38,20 +40,16 @@ class AsyncIOWrapper:
         self.output = self.output[-self.MAX_OUTPUT_LENGTH :]
         self.output_ready.set()
 
-    async def write_to_proc(
-        self, proc: asyncio.subprocess.Process, data: bytes
-    ) -> None:
-        await proc.stdin.write(data)
-
 
 class ProcessManager:
     instances: dict[str, Instance] = None
     processes: dict[str, dict[str, asyncio.subprocess.Process]] = None
-    iowrappers: dict[str, dict[str, dict[str, AsyncIOWrapper]]] = None
+    iowrappers: dict[str, dict[str, dict[str, AsyncIOWrapper]]] = None  # iid,"0",uid
 
     def __init__(self):
         self.processes = dict[str, dict[str, asyncio.subprocess.Process]]()
         self.instances = dict[str, Instance]()
+        self.iowrappers = dict[str, dict]()
         self.load_instances_from_path()
 
     def load_instances_from_path(self) -> None:
@@ -59,17 +57,25 @@ class ProcessManager:
         instances = os.listdir(Config.instance_root_path)
         for instance_name in instances:
             if instance_name not in self.instances:
-                instance_template = Template.model_validate_json(
-                    open(
-                        os.path.join(
-                            Config.instance_root_path,
-                            instance_name,
-                            Config.instance_info_path,
-                        ),
-                        encoding="utf-8",
-                    ).read()
+                instance_info_path = os.path.join(
+                    Config.instance_root_path,
+                    instance_name,
+                    Config.instance_info_path,
                 )
-                self.create_instance(instance_template, instance_name)
+                if not os.path.exists(instance_info_path):
+                    continue
+                else:
+                    instance_template = Template.model_validate_json(
+                        open(
+                            os.path.join(
+                                Config.instance_root_path,
+                                instance_name,
+                                Config.instance_info_path,
+                            ),
+                            encoding="utf-8",
+                        ).read()
+                    )
+                    self.create_instance(instance_template, instance_name)
 
     def create_instance(self, template: Template, id: str = None) -> str:
         if id is not None and id in self.instances:
@@ -77,6 +83,7 @@ class ProcessManager:
         instance = Instance(template, id)
         self.instances[instance.id] = instance
         self.processes[instance.id] = dict[str, asyncio.subprocess.Process]()
+        self.iowrappers[instance.id] = dict[str, dict[str, dict[str, AsyncIOWrapper]]]()
         instance.status = InstanceStatus.STOP
         return instance.id
 
@@ -86,6 +93,7 @@ class ProcessManager:
         await instance.clear()
         del self.instances[instance.id]
         del self.processes[instance.id]
+        del self.iowrappers[instance.id]
 
     async def stop(self, id_or_prefix: str, force: bool = False) -> str:
         instance = self.get_instance(id_or_prefix)
@@ -125,9 +133,10 @@ class ProcessManager:
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
         )
         self.processes[id]["0"] = process
+        self.iowrappers[id]["0"] = dict[str, AsyncIOWrapper]()
         instance.status = InstanceStatus.RUNNING
         instance.start_time = datetime.now()
-
+        
     async def get_log_out(
         self, instance_id_or_prefix: str, encoding: str = "utf-8"
     ) -> str:
@@ -151,20 +160,28 @@ class ProcessManager:
                         await self.exec(iid)
                     continue
                 proc = self.processes[iid]["0"]
-                out_peek_n = unsafe_peek(proc.stdout)
-                if out_peek_n > 0:
-                    await self.instances[iid].log.log_out(
-                        await proc.stdout.read(out_peek_n)
-                    )
-                err_peek_n = unsafe_peek(proc.stderr)
-                if err_peek_n > 0:
-                    await self.instances[iid].log.log_err(
-                        await proc.stderr.read(err_peek_n)
-                    )
+                # log out data
+                if (out_peek_n := unsafe_peek(proc.stdout)) > 0:
+                    data = await proc.stdout.read(out_peek_n)
+                    await self.instances[iid].log.log_out(data)
+                    for wrapper in self.iowrappers[iid]["0"].values():
+                        await wrapper.read_from_proc(data)
+                # log err data
+                if (err_peek_n := unsafe_peek(proc.stderr)) > 0:
+                    data = await proc.stderr.read(err_peek_n)
+                    await self.instances[iid].log.log_err(data)
+                    for wrapper in self.iowrappers[iid]["0"].values():
+                        await wrapper.read_from_proc(data)
                 if proc.returncode is not None:
                     del self.processes[iid]["0"]
+                    del self.iowrappers[iid]["0"]
                     self.instances[iid].status = InstanceStatus.EXITED
                 await self.instances[iid].log.flush_all()
+
+    async def write_to_proc(self, instance_id: str, data: bytes, flush: bool = True):
+        self.processes[instance_id]["0"].stdin.write(data)
+        if flush:
+            await self.processes[instance_id]["0"].stdin.drain()
 
     async def watch_loop(self, interval: float = 0.04):
         while True:

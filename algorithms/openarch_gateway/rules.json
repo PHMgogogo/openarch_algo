@@ -1,19 +1,5 @@
 [
     {
-        "name": "default",
-        "order": 100,
-        "rule_type": "PREFIX",
-        "pattern": "/docs",
-        "dest_index": [],
-        "dest_format": "/docs",
-        "rewrite_host": null,
-        "editable": true,
-        "timeout": null,
-        "enable": false,
-        "file_serve_root_path": null,
-        "default_entrance": "/docs"
-    },
-    {
         "name": "smgr",
         "order": 1,
         "rule_type": "PREFIX",
