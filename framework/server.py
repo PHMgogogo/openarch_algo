@@ -3,16 +3,27 @@ try:
 except ImportError:
     import base
 import fastapi
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from sympy import N
 import torch
 import enum
 from torch import nn, optim
 import asyncio
 import typing
+import tempfile
+import os
+import csv
+from pydantic import BaseModel
+from fastapi import FastAPI
 
 
 class State(str, enum.Enum):
     def _generate_next_value_(name, start, count, last_values):
         return name
+
+    def __str__(self):
+        return self.name
 
     UNLOADED = enum.auto()
     LOADED = enum.auto()
@@ -47,7 +58,11 @@ class Container:
             raise RuntimeError(f"Cannot unload from state {self.state}")
         _m = self.model
         self.model = None
-        del _m
+        _c = self.criterion
+        self.criterion = None
+        _o = self.optimizer
+        self.optimizer = None
+        del _m, _c, _o
         torch.cuda.empty_cache()
         self.state = State.UNLOADED
 
@@ -58,6 +73,9 @@ class Container:
 
     def set_criterion(self, criterion: nn.Module) -> None:
         self.criterion = criterion
+
+    def set_optimzer(self, optimizer: optim.Optimizer) -> None:
+        self.optimizer = optimizer
 
     def epoch_callback(self, *args, **kwargs) -> None:
         self.epoch_progress = kwargs
@@ -70,9 +88,6 @@ class Container:
             self.result.append(kwargs["result"])
         if kwargs.get("done", False):
             self.state = State.LOADED
-
-    def set_optimzer(self, optimzer: optim.Optimizer) -> None:
-        self.optimizer = self.optimizer
 
     def interrupt_signal(self, reset: bool = False) -> bool:
         _i = self.interrupt
@@ -115,6 +130,33 @@ class Container:
         else:
             return await self.task
 
+    async def infer(
+        self,
+        data: torch.utils.data.Dataset,
+        eval_args: base.EvalArgs = base.EvalArgs(),
+        detach: bool = False,
+    ) -> list[base.ModelResult]:
+        if self.state != State.LOADED:
+            raise RuntimeError(f"Cannot start inferring from state {self.state}")
+        self.prepare()
+        self.task = asyncio.create_task(
+            asyncio.to_thread(
+                base.train_or_eval,
+                model=self.model,
+                data=data,
+                epoch_callback=self.epoch_callback,
+                batch_callback=self.batch_callback,
+                result_callback=self.result_callback,
+                interrupt_signal=self.interrupt_signal,
+                **eval_args.model_dump(),
+            )
+        )
+        self.state = State.INFERRING
+        if detach:
+            return []
+        else:
+            return await self.task
+
     async def wait(self):
         if self.task is not None:
             await self.task
@@ -126,7 +168,120 @@ class Container:
             return True
 
 
-app = fastapi.FastAPI()
+class PathRequest(BaseModel):
+    path: str | None = None
+
+
+class JsonCSV(BaseModel):
+    rows: list[list[typing.Any]]
+
+    def write_to_tmp(self) -> str:
+        f = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", newline="", encoding="utf-8", delete=False
+        )
+        writer = csv.writer(f)
+        writer.writerows(self.rows)
+        return f.name
+
+
+class DatasetRequest(BaseModel):
+    content_type: typing.Literal["path_csv", "json_csv", "text_csv"]
+    content: str | JsonCSV | typing.Any
+    label_cols: list[str]
+
+    def get(self) -> base.TableByRowDataset:
+        if self.content_type == "path_csv":
+            return base.TableByRowDataset(self.content, self.label_cols)
+        elif self.content_type == "json_csv":
+            return base.TableByRowDataset(self.content.write_to_tmp(), self.label_cols)
+        elif self.content_type == "text_csv":
+            f = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".csv", newline="", encoding="utf-8", delete=False
+            )
+            f.write(self.content)
+            return base.TableByRowDataset(f.name, self.label_cols)
+
+
+class TrainRequest(BaseModel):
+    dataset: DatasetRequest
+    args: base.TrainArgs
+    detach: bool = False
+
+
+class InferRequest(BaseModel):
+    dataset: DatasetRequest
+    args: base.EvalArgs
+    detach: bool = False
+
+
+class ProgressResponse(BaseModel):
+    state: str
+    epoch_progress: dict | None
+    batch_progress: dict | None
+    result: list[base.LossModelResult] | None
+
+
+def create_app() -> FastAPI:
+    app = fastapi.FastAPI()
+    c = Container()
+
+    @app.exception_handler(Exception)
+    async def exception_handler(request: fastapi.Request, exc: Exception):
+        return fastapi.responses.JSONResponse(
+            status_code=500,
+            content={"detail": str(exc), "type": type(exc).__name__}
+        )
+
+    @app.get("/")
+    async def index():
+        return FileResponse(os.path.join(os.path.dirname(__file__), "index.html"))
+
+    @app.post("/save")
+    async def save(path_request: PathRequest):
+        return await c.save(path_request)
+
+    @app.post("/load")
+    async def load(path_request: PathRequest):
+        return await c.load(path_request.path)
+
+    @app.post("/unload")
+    async def unload():
+        return await c.unload()
+
+    @app.post("/train")
+    async def train(train_request: TrainRequest):
+        return await c.train(
+            train_request.dataset.get(), train_request.args, train_request.detach
+        )
+
+    @app.post("/infer")
+    async def infer(infer_request: InferRequest):
+        return await c.infer(
+            infer_request.dataset.get(), infer_request.args, infer_request.detach
+        )
+
+    @app.get("/state")
+    async def state():
+        return ProgressResponse(
+            state=str(c.state),
+            epoch_progress=c.epoch_progress,
+            batch_progress=c.batch_progress,
+            result=c.result,
+        )
+
+    @app.get("/wait")
+    async def wait():
+        return await c.wait()
+
+    @app.get("/stop")
+    async def stop():
+        c.interrupt = True
+        return
+
+    return app
+
+
+# uvicorn server:create_app --factory
 
 
 async def main():

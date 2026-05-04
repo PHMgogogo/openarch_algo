@@ -20,7 +20,10 @@ class TableByRowDataset(Dataset):
     _cache: dict[int, tuple[torch.Tensor, torch.Tensor]]
 
     def __init__(
-        self, csv_path: str, label_cols: list[str], use_cache: bool = True
+        self,
+        csv_path: str,
+        label_cols: list[str] | None = None,
+        use_cache: bool = True,
     ) -> None:
         self.df = pd.read_csv(csv_path)
         self.label_cols = label_cols
@@ -38,9 +41,12 @@ class TableByRowDataset(Dataset):
         data = torch.tensor(
             row[self.data_cols].values, dtype=torch.float32, device=device
         )
-        label = torch.tensor(
-            row[self.label_cols].values, dtype=torch.float32, device=device
-        )
+        if self.label_cols is None:
+            label = data
+        else:
+            label = torch.tensor(
+                row[self.label_cols].values, dtype=torch.float32, device=device
+            )
         return data, label
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -94,16 +100,20 @@ class Model(nn.Module):
 
 
 class TrainOrEvalArgs(BaseModel):
-    epoch: int = 1
     batch_size: int = 1
-    learning_rate: float = 1e-3
     device: typing.Literal["cpu", "cuda"] | str = "cpu"
     progress: bool = False
     mode: typing.Literal["train", "eval"]
 
 
 class TrainArgs(TrainOrEvalArgs):
+    epoch: int = 1
+    learning_rate: float = 1e-3
     mode: typing.Literal["train"] = "train"
+
+
+class EvalArgs(TrainOrEvalArgs):
+    mode: typing.Literal["eval"] = "eval"
 
 
 # <train-or-eval-content>
@@ -125,9 +135,9 @@ def train_or_eval(
 ) -> list[ModelResult]:
     model_result = []
     train = mode == "train"
+    if criterion is None:
+        criterion = nn.MSELoss()
     if train:
-        if criterion is None:
-            criterion = nn.MSELoss()
         if optimizer is None:
             optimizer = optim.SGD(model.parameters(), lr=learning_rate)
         model.train()

@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenArch Algo - 神经网络训练平台</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .status-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #dc3545;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.loaded {
+            background: #28a745;
+        }
+
+        .status-indicator.training, .status-indicator.inferring {
+            background: #ffc107;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-text {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 15px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1em;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .file-upload {
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-upload:hover {
+            background: #f8f9fa;
+        }
+
+        .file-upload.dragover {
+            background: #e8f0fe;
+            border-color: #764ba2;
+        }
+
+        .file-upload-icon {
+            font-size: 3em;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .csv-preview {
+            margin-top: 15px;
+            max-height: 200px;
+            overflow: auto;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .csv-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+
+        .csv-preview th,
+        .csv-preview td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .csv-preview th {
+            background: #667eea;
+            color: white;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+            max-height: 300px;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+        }
+
+        .log-entry.info {
+            color: #4ec9b0;
+        }
+
+        .log-entry.error {
+            color: #f14c4c;
+        }
+
+        .log-entry.success {
+            color: #6a9955;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .checkbox-item input {
+            width: auto;
+        }
+
+        .error-alert {
+            background: #f8d7da;
+            border: 2px solid #f5c6cb;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-alert.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        .error-header {
+            color: #721c24;
+            font-weight: 700;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .error-close {
+            cursor: pointer;
+            font-size: 1.5em;
+            line-height: 1;
+        }
+
+        .error-detail {
+            color: #721c24;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-container {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .result-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result-index {
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .result-content {
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 OpenArch Algo 训练平台</h1>
+
+        <div class="error-alert" id="errorAlert">
+            <div class="error-header">
+                <span>❌ 错误</span>
+                <span class="error-close" onclick="closeError()">&times;</span>
+            </div>
+            <div class="error-detail" id="errorDetail"></div>
+        </div>
+
+        <div class="card">
+            <h2>📊 系统状态</h2>
+            <div class="status-bar">
+                <div class="status-indicator" id="statusIndicator"></div>
+                <span class="status-text" id="statusText">UNLOADED</span>
+                <button class="btn btn-warning" onclick="refreshState()">🔄 刷新状态</button>
+            </div>
+            <div class="progress-container" id="progressContainer" style="display: none;">
+                <h3 style="margin-bottom: 15px; color: #667eea;">训练进度</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="epochProgress" style="width: 0%">0%</div>
+                </div>
+                <div class="progress-info">
+                    <span>Epoch: <span id="epochInfo">0/0</span></span>
+                    <span>Batch: <span id="batchInfo">0/0</span></span>
+                </div>
+            </div>
+            <div class="result-container" id="resultContainer" style="display: none;">
+                <h3 style="margin-bottom: 15px; color: #667eea;">📈 训练结果</h3>
+                <div id="resultList"></div>
+            </div>
+            <div style="margin-top: 15px;">
+                <button class="btn btn-danger" id="stopBtn" onclick="stopTask()" disabled>⏹ 停止任务</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🤖 模型管理</h2>
+            <div class="row">
+                <div class="form-group">
+                    <label>模型路径 (可选)</label>
+                    <input type="text" id="modelPath" placeholder="例如: model.pth">
+                </div>
+            </div>
+            <div>
+                <button class="btn btn-success" onclick="loadModel()">📥 加载模型</button>
+                <button class="btn btn-primary" onclick="saveModel()">📤 保存模型</button>
+                <button class="btn btn-danger" onclick="unloadModel()">🗑 卸载模型</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('train')">🎓 训练</button>
+                <button class="tab" onclick="switchTab('infer')">🔍 推理</button>
+            </div>
+
+            <div id="trainTab" class="tab-content active">
+                <h2>📝 训练配置</h2>
+                <div class="form-group">
+                    <label>数据集</label>
+                    <div class="file-upload" id="trainFileUpload" onclick="document.getElementById('trainFile').click()">
+                        <div class="file-upload-icon">📁</div>
+                        <div>点击或拖拽CSV文件到此处</div>
+                        <input type="file" id="trainFile" accept=".csv" style="display: none;">
+                    </div>
+                    <div class="csv-preview" id="trainCsvPreview" style="display: none;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>标签列 (选择需要预测的列)</label>
+                    <div class="checkbox-group" id="trainLabelCols">
+                        <span style="color: #999;">请先上传CSV文件</span>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="form-group">
+                        <label>Epoch 数量</label>
+                        <input type="number" id="trainEpoch" value="100" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Batch Size</label>
+                        <input type="number" id="trainBatchSize" value="32" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>学习率</label>
+                        <input type="number" id="trainLearningRate" value="0.001" step="0.0001" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>设备</label>
+                        <select id="trainDevice">
+                            <option value="cpu">CPU</option>
+                            <option value="cuda">CUDA (GPU)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="trainDetach"> 后台运行 (不等待结果)
+                    </label>
+                </div>
+
+                <button class="btn btn-primary" onclick="startTrain()">🚀 开始训练</button>
+            </div>
+
+            <div id="inferTab" class="tab-content">
+                <h2>🔍 推理配置</h2>
+                <div class="form-group">
+                    <label>数据集</label>
+                    <div class="file-upload" id="inferFileUpload" onclick="document.getElementById('inferFile').click()">
+                        <div class="file-upload-icon">📁</div>
+                        <div>点击或拖拽CSV文件到此处</div>
+                        <input type="file" id="inferFile" accept=".csv" style="display: none;">
+                    </div>
+                    <div class="csv-preview" id="inferCsvPreview" style="display: none;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>标签列 (选择需要预测的列)</label>
+                    <div class="checkbox-group" id="inferLabelCols">
+                        <span style="color: #999;">请先上传CSV文件</span>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="form-group">
+                        <label>Batch Size</label>
+                        <input type="number" id="inferBatchSize" value="32" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>设备</label>
+                        <select id="inferDevice">
+                            <option value="cpu">CPU</option>
+                            <option value="cuda">CUDA (GPU)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="inferDetach"> 后台运行 (不等待结果)
+                    </label>
+                </div>
+
+                <button class="btn btn-primary" onclick="startInfer()">🔍 开始推理</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📋 日志</h2>
+            <div class="log-container" id="logContainer">
+                <div class="log-entry info">系统已就绪</div>
+            </div>
+            <button class="btn btn-primary" style="margin-top: 15px;" onclick="clearLog()">🗑 清空日志</button>
+        </div>
+    </div>
+
+    <script>
+        let trainCsvContent = '';
+        let trainHeaders = [];
+        let inferCsvContent = '';
+        let inferHeaders = [];
+        let statePolling = null;
+
+        window.onload = function() {
+            refreshState();
+            setupFileUpload('train');
+            setupFileUpload('infer');
+            startStatePolling();
+        };
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(tab + 'Tab').classList.add('active');
+        }
+
+        function setupFileUpload(prefix) {
+            const fileInput = document.getElementById(prefix + 'File');
+            const uploadArea = document.getElementById(prefix + 'FileUpload');
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0], prefix);
+                }
+            });
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    handleFile(e.dataTransfer.files[0], prefix);
+                }
+            });
+        }
+
+        function handleFile(file, prefix) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const content = e.target.result;
+                if (prefix === 'train') {
+                    trainCsvContent = content;
+                } else {
+                    inferCsvContent = content;
+                }
+                parseCsv(content, prefix);
+                addLog('success', `${prefix === 'train' ? '训练' : '推理'}数据集已加载: ${file.name}`);
+            };
+            reader.readAsText(file);
+        }
+
+        function parseCsv(content, prefix) {
+            const lines = content.split('\n').filter(line => line.trim());
+            const headers = lines[0].split(',').map(h => h.trim());
+            
+            if (prefix === 'train') {
+                trainHeaders = headers;
+            } else {
+                inferHeaders = headers;
+            }
+
+            const previewContainer = document.getElementById(prefix + 'CsvPreview');
+            const labelColsContainer = document.getElementById(prefix + 'LabelCols');
+            
+            let tableHtml = '<table><thead><tr>';
+            headers.forEach(h => {
+                tableHtml += `<th>${h}</th>`;
+            });
+            tableHtml += '</tr></thead><tbody>';
+            
+            for (let i = 1; i < Math.min(lines.length, 6); i++) {
+                const cells = lines[i].split(',');
+                tableHtml += '<tr>';
+                cells.forEach(c => {
+                    tableHtml += `<td>${c.trim()}</td>`;
+                });
+                tableHtml += '</tr>';
+            }
+            tableHtml += '</tbody></table>';
+            previewContainer.innerHTML = tableHtml;
+            previewContainer.style.display = 'block';
+
+            let checkboxHtml = '';
+            headers.forEach(h => {
+                checkboxHtml += `
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="${prefix}_col_${h}" value="${h}">
+                        <label for="${prefix}_col_${h}">${h}</label>
+                    </div>
+                `;
+            });
+            labelColsContainer.innerHTML = checkboxHtml;
+        }
+
+        function getSelectedLabelCols(prefix) {
+            const headers = prefix === 'train' ? trainHeaders : inferHeaders;
+            const selected = [];
+            headers.forEach(h => {
+                const checkbox = document.getElementById(`${prefix}_col_${h}`);
+                if (checkbox && checkbox.checked) {
+                    selected.push(h);
+                }
+            });
+            return selected;
+        }
+
+        function showError(detail, type = '') {
+            const alert = document.getElementById('errorAlert');
+            const detailEl = document.getElementById('errorDetail');
+            const message = type ? `[${type}] ${detail}` : detail;
+            detailEl.textContent = message;
+            alert.classList.add('show');
+            addLog('error', message);
+        }
+
+        function closeError() {
+            document.getElementById('errorAlert').classList.remove('show');
+        }
+
+        async function handleApiResponse(response, successMessage) {
+            if (response.ok) {
+                addLog('success', successMessage);
+                return true;
+            } else {
+                const error = await response.json();
+                showError(error.detail || '未知错误', error.type || 'Error');
+                return false;
+            }
+        }
+
+        async function loadModel() {
+            const path = document.getElementById('modelPath').value || null;
+            try {
+                addLog('info', `正在加载模型...`);
+                const response = await fetch('/load', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                });
+                await handleApiResponse(response, '模型加载成功');
+                refreshState();
+            } catch (e) {
+                showError('模型加载失败: ' + e.message, e.name);
+            }
+        }
+
+        async function saveModel() {
+            const path = document.getElementById('modelPath').value;
+            if (!path) {
+                showError('请输入模型保存路径', 'ValidationError');
+                return;
+            }
+            try {
+                addLog('info', `正在保存模型到 ${path}...`);
+                const response = await fetch('/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                });
+                await handleApiResponse(response, '模型保存成功');
+            } catch (e) {
+                showError('模型保存失败: ' + e.message, e.name);
+            }
+        }
+
+        async function unloadModel() {
+            try {
+                addLog('info', '正在卸载模型...');
+                const response = await fetch('/unload', { method: 'POST' });
+                await handleApiResponse(response, '模型卸载成功');
+                refreshState();
+            } catch (e) {
+                showError('模型卸载失败: ' + e.message, e.name);
+            }
+        }
+
+        async function startTrain() {
+            const labelCols = getSelectedLabelCols('train');
+            if (labelCols.length === 0) {
+                showError('请至少选择一个标签列', 'ValidationError');
+                return;
+            }
+            if (!trainCsvContent) {
+                showError('请先上传训练数据集', 'ValidationError');
+                return;
+            }
+
+            const request = {
+                dataset: {
+                    content_type: 'text_csv',
+                    content: trainCsvContent,
+                    label_cols: labelCols
+                },
+                args: {
+                    epoch: parseInt(document.getElementById('trainEpoch').value),
+                    batch_size: parseInt(document.getElementById('trainBatchSize').value),
+                    learning_rate: parseFloat(document.getElementById('trainLearningRate').value),
+                    device: document.getElementById('trainDevice').value,
+                    progress: true,
+                    mode: 'train'
+                },
+                detach: document.getElementById('trainDetach').checked
+            };
+
+            try {
+                addLog('info', '开始训练...');
+                const response = await fetch('/train', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(request)
+                });
+                await handleApiResponse(response, '训练任务已启动');
+                refreshState();
+            } catch (e) {
+                showError('训练启动失败: ' + e.message, e.name);
+            }
+        }
+
+        async function startInfer() {
+            const labelCols = getSelectedLabelCols('infer');
+            if (labelCols.length === 0) {
+                showError('请至少选择一个标签列', 'ValidationError');
+                return;
+            }
+            if (!inferCsvContent) {
+                showError('请先上传推理数据集', 'ValidationError');
+                return;
+            }
+
+            const request = {
+                dataset: {
+                    content_type: 'text_csv',
+                    content: inferCsvContent,
+                    label_cols: labelCols
+                },
+                args: {
+                    batch_size: parseInt(document.getElementById('inferBatchSize').value),
+                    device: document.getElementById('inferDevice').value,
+                    progress: true,
+                    mode: 'eval'
+                },
+                detach: document.getElementById('inferDetach').checked
+            };
+
+            try {
+                addLog('info', '开始推理...');
+                const response = await fetch('/infer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(request)
+                });
+                await handleApiResponse(response, '推理任务已启动');
+                refreshState();
+            } catch (e) {
+                showError('推理启动失败: ' + e.message, e.name);
+            }
+        }
+
+        async function stopTask() {
+            try {
+                await fetch('/stop', { method: 'GET' });
+                addLog('info', '停止信号已发送');
+            } catch (e) {
+                showError('发送停止信号失败: ' + e.message, e.name);
+            }
+        }
+
+        async function refreshState() {
+            try {
+                const response = await fetch('/state');
+                const data = await response.json();
+                
+                const indicator = document.getElementById('statusIndicator');
+                const text = document.getElementById('statusText');
+                const stopBtn = document.getElementById('stopBtn');
+                const progressContainer = document.getElementById('progressContainer');
+                const resultContainer = document.getElementById('resultContainer');
+                const resultList = document.getElementById('resultList');
+                
+                text.textContent = data.state;
+                indicator.className = 'status-indicator ' + data.state.toLowerCase();
+                
+                if (data.state === 'TRAINING' || data.state === 'INFERRING') {
+                    stopBtn.disabled = false;
+                    progressContainer.style.display = 'block';
+                    
+                    if (data.epoch_progress) {
+                        const epochPercent = (data.epoch_progress.n / data.epoch_progress.total) * 100;
+                        document.getElementById('epochProgress').style.width = epochPercent + '%';
+                        document.getElementById('epochProgress').textContent = epochPercent.toFixed(1) + '%';
+                        document.getElementById('epochInfo').textContent = `${data.epoch_progress.n}/${data.epoch_progress.total}`;
+                    }
+                    
+                    if (data.batch_progress) {
+                        document.getElementById('batchInfo').textContent = `${data.batch_progress.n}/${data.batch_progress.total}`;
+                    }
+                } else {
+                    stopBtn.disabled = true;
+                    progressContainer.style.display = 'none';
+                }
+
+                if (data.result && data.result.length > 0) {
+                    resultContainer.style.display = 'block';
+                    let resultHtml = '';
+                    data.result.forEach((result, index) => {
+                        resultHtml += `
+                            <div class="result-item">
+                                <div class="result-index">Epoch ${index + 1}</div>
+                                <div class="result-content">${JSON.stringify(result, null, 2)}</div>
+                            </div>
+                        `;
+                    });
+                    resultList.innerHTML = resultHtml;
+                } else {
+                    resultContainer.style.display = 'none';
+                }
+            } catch (e) {
+                console.error('刷新状态失败:', e);
+            }
+        }
+
+        function startStatePolling() {
+            if (statePolling) {
+                clearInterval(statePolling);
+            }
+            statePolling = setInterval(refreshState, 5000);
+        }
+
+        function addLog(type, message) {
+            const container = document.getElementById('logContainer');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${time}] ${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('logContainer').innerHTML = '<div class="log-entry info">日志已清空</div>';
+        }
+    </script>
+</body>
+</html>
