@@ -248,6 +248,12 @@ async def get_instance_logs_err(instance_id: str):
     return {"logs": logs}
 
 
+@app.get("/instances/{instance_id}/connections")
+async def get_instance_connections(instance_id: str):
+    pcs = await pm.get_process_connections(instance_id)
+    return {"connections": pcs}
+
+
 @app.post("/instances/{instance_id}/stop")
 async def stop_instance(instance_id: str, force: bool = False):
     await pm.stop(instance_id, force)

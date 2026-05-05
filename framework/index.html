@@ -391,6 +391,40 @@
             border-radius: 10px;
         }
 
+        .result-header {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            color: #667eea;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .result-header:hover {
+            color: #764ba2;
+        }
+
+        .result-header .toggle-icon {
+            font-size: 1.2em;
+            transition: transform 0.3s;
+        }
+
+        .result-header.collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+
+        .result-list {
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .result-list.collapsed {
+            max-height: 0 !important;
+        }
+
         .result-item {
             background: white;
             padding: 15px;
@@ -399,15 +433,34 @@
             border-left: 4px solid #667eea;
         }
 
-        .result-index {
+        .result-item-header {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             font-weight: 700;
             color: #667eea;
             margin-bottom: 5px;
         }
 
+        .result-item-header .toggle-icon {
+            transition: transform 0.3s;
+        }
+
+        .result-item-header.collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+
         .result-content {
             font-family: 'Consolas', 'Monaco', monospace;
             color: #333;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .result-content.collapsed {
+            max-height: 0 !important;
         }
     </style>
 </head>
@@ -441,8 +494,11 @@
                 </div>
             </div>
             <div class="result-container" id="resultContainer" style="display: none;">
-                <h3 style="margin-bottom: 15px; color: #667eea;">📈 训练结果</h3>
-                <div id="resultList"></div>
+                <div class="result-header" onclick="toggleResultList()">
+                    <span>📈 训练结果</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="result-list" id="resultList"></div>
             </div>
             <div style="margin-top: 15px;">
                 <button class="btn btn-danger" id="stopBtn" onclick="stopTask()" disabled>⏹ 停止任务</button>
@@ -892,8 +948,11 @@
                     data.result.forEach((result, index) => {
                         resultHtml += `
                             <div class="result-item">
-                                <div class="result-index">Epoch ${index + 1}</div>
-                                <div class="result-content">${JSON.stringify(result, null, 2)}</div>
+                                <div class="result-item-header" onclick="toggleResultItem(${index})">
+                                    <span>Epoch ${index + 1}</span>
+                                    <span class="toggle-icon">▼</span>
+                                </div>
+                                <div class="result-content" id="resultContent${index}">${JSON.stringify(result, null, 2)}</div>
                             </div>
                         `;
                     });
@@ -910,7 +969,32 @@
             if (statePolling) {
                 clearInterval(statePolling);
             }
-            statePolling = setInterval(refreshState, 5000);
+            statePolling = setInterval(refreshState, 1000);
+        }
+
+        let resultListCollapsed = false;
+        const resultItemCollapsed = {};
+
+        function toggleResultList() {
+            const header = document.querySelector('.result-header');
+            const list = document.getElementById('resultList');
+            resultListCollapsed = !resultListCollapsed;
+            header.classList.toggle('collapsed', resultListCollapsed);
+            list.classList.toggle('collapsed', resultListCollapsed);
+            if (!resultListCollapsed) {
+                list.style.maxHeight = list.scrollHeight + 'px';
+            }
+        }
+
+        function toggleResultItem(index) {
+            const header = document.querySelectorAll('.result-item-header')[index];
+            const content = document.getElementById(`resultContent${index}`);
+            resultItemCollapsed[index] = !resultItemCollapsed[index];
+            header.classList.toggle('collapsed', resultItemCollapsed[index]);
+            content.classList.toggle('collapsed', resultItemCollapsed[index]);
+            if (!resultItemCollapsed[index]) {
+                content.style.maxHeight = content.scrollHeight + 'px';
+            }
         }
 
         function addLog(type, message) {

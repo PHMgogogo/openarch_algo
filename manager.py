@@ -1,4 +1,4 @@
-from entity import Template, Instance, InstanceStatus, Algorithm
+from entity import Template, Instance, InstanceStatus, Algorithm, ProcessConnection
 import asyncio
 import os
 from config import Config
@@ -6,6 +6,7 @@ import zipfile
 from datetime import datetime
 from algorithms.openarch_gateway.entity import UrlProxyRule
 import uuid
+import psutil
 
 
 def unsafe_peek(stream_reader: asyncio.StreamReader) -> int:
@@ -136,7 +137,7 @@ class ProcessManager:
         self.iowrappers[id]["0"] = dict[str, AsyncIOWrapper]()
         instance.status = InstanceStatus.RUNNING
         instance.start_time = datetime.now()
-        
+
     async def get_log_out(
         self, instance_id_or_prefix: str, encoding: str = "utf-8"
     ) -> str:
@@ -271,6 +272,35 @@ class ProcessManager:
             return None
         else:
             return starts_with
+
+    async def get_process_connections(
+        self, instance_id_or_prefix: str
+    ) -> list[ProcessConnection] | None:
+        instance = self.get_instance(instance_id_or_prefix)
+        if not isinstance(instance, Instance):
+            return None
+        if "0" not in self.processes[instance.id]:
+            return None
+        pid = self.processes[instance.id]["0"].pid
+        p = psutil.Process(pid)
+        children = [p] + p.children(True)
+        result = []
+        for child in children:
+            conns = []
+            for conn in child.net_connections("all"):
+                conn_dict = conn._asdict()
+                for k, v in conn_dict.items():
+                    if hasattr(v, "name"):
+                        conn_dict[k] = v.name
+                    elif hasattr(v, "_asdict"):
+                        conn_dict[k] = v._asdict()
+                    elif isinstance(v, tuple):
+                        conn_dict[k] = None
+                conns.append(conn_dict)
+            result.append(
+                ProcessConnection(pid=child.pid, name=child.name(), conns=conns)
+            )
+        return result
 
     def upload_unzip_algorithm(
         self,

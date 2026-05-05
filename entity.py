@@ -12,6 +12,8 @@ import sys
 import re
 from algorithms.openarch_gateway.entity import UrlProxyRule
 from client import service
+import typing
+import socket
 
 
 def folder_to_list(path: str):
@@ -256,6 +258,26 @@ async def unlink_dir_platform(path: str):
             raise RuntimeError(f"Failed to remove junction: {stderr.decode().strip()}")
     else:
         raise ValueError(f"Path is not a symlink: {path}")
+
+
+class AddrInfo(BaseModel):
+    ip: str
+    port: int
+
+
+class ConnectionInfo(BaseModel):
+    fd: int
+    family: typing.Literal[*[item.name for item in socket.AddressFamily]]  # type: ignore
+    type: typing.Literal[*[item.name for item in socket.SocketKind]]  # type: ignore
+    laddr: AddrInfo | None
+    raddr: AddrInfo | None
+    status: str
+
+
+class ProcessConnection(BaseModel):
+    pid: int
+    name: str
+    conns: list[ConnectionInfo]
 
 
 class Instance:

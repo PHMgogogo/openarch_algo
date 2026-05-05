@@ -3,9 +3,7 @@ try:
 except ImportError:
     import base
 import fastapi
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from sympy import N
 import torch
 import enum
 from torch import nn, optim
@@ -281,21 +279,4 @@ def create_app() -> FastAPI:
     return app
 
 
-# uvicorn server:create_app --factory
-
-
-async def main():
-
-    c = Container()
-    await c.load()
-    data = base.TableByRowDataset("../example/sqrt.csv", label_cols=["y"])
-    await c.train(data, base.TrainArgs(epoch=100), detach=True)
-    while not c.done():
-        print(c.batch_progress)
-        print(c.epoch_progress)
-        print()
-        await asyncio.sleep(1)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+# uvicorn server:create_app --factory --port 0

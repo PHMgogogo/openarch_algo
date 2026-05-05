@@ -183,6 +183,16 @@ class process:
                 f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}"
             ).json()
 
+        def connections(id_or_prefix: str) -> dict:
+            """Get connection information for a specific instance
+
+            Args:
+                id_or_prefix: Instance ID or prefix
+            """
+            return requests.get(
+                f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/connections"
+            ).json()
+
         class logs:
             """Log access operations"""
 
