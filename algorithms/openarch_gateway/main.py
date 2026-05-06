@@ -110,12 +110,12 @@ class ServiceManager:
                 del self._rules[name]
                 await self.flush()
 
-    def match(self, path: str) -> tuple[UrlProxyRule | None, str]:
+    def match(self, path: str) -> tuple[UrlProxyRule | None, str, list[str]]:
         for rule in self._sorted_rules:
             dest = rule.dest(path)
             if dest:
-                return rule, dest
-        return None, ""
+                return rule, dest, rule.match(path)[1]
+        return None, "", []
 
     def list(self) -> list[UrlProxyRule]:
         return list(self._rules.values())
@@ -153,7 +153,7 @@ async def lifespan(app: FastAPI):
     )
     async def gateway(request: Request, path: str):
         sm: ServiceManager = app.sm
-        upr, dest = sm.match(path)
+        upr, dest, _ = sm.match(path)
         if upr is None:
             return PlainTextResponse("no match", status_code=404)
         if upr.file_serve_root_path is not None:
@@ -172,7 +172,8 @@ async def lifespan(app: FastAPI):
     @app.websocket("{path:path}")
     async def ws_gateway(websocket: WebSocket, path: str):
         try:
-            upr, dest = app.sm.match(path)
+            sm: ServiceManager = app.sm
+            upr, dest, _ = sm.match(path)
             raw_host = websocket.headers.get("host")
             host = upr.host(raw_host)
             if host == raw_host:
@@ -209,27 +210,27 @@ async def post_init(app: FastAPI):
 
         @router.get("/rules")
         async def rules_list():
-            return app.sm.list()
+            return sm.list()
 
         @router.delete("/rules/{name}")
         async def rules_delete(name: str):
-            return await app.sm.delete(name)
+            return await sm.delete(name)
 
         @router.put("/rules")
         async def rules_update(upr: UrlProxyRule):
-            return await app.sm.add(upr)
+            return await sm.add(upr)
 
         @router.post("/rules")
         async def rules_add(upr: UrlProxyRule):
-            return await app.sm.add(upr, update=False)
+            return await sm.add(upr, update=False)
 
         @router.post("/rules/match")
         async def rules_match(path_request: PathRequest):
-            return app.sm.match(path_request.path)
+            return sm.match(path_request.path)
 
         @router.post("/rules/{name}/preview")
         async def rules_preview(name: str, path_request: PathRequest):
-            return app.sm.get(name).dest(path_request.path)
+            return sm.get(name).dest(path_request.path)
 
         @router.post("/rules/test")
         async def rules_test(upr_test_request: UprTestRequest):

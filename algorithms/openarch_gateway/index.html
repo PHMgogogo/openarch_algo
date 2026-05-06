@@ -710,13 +710,14 @@
                 if (!response.ok) throw new Error('预览失败');
 
                 const result = await response.json();
-                // 后端返回的是数组 [rule, dest]
-                if (result && result.length === 2) {
-                    const [rule, dest] = result;
+                // 后端返回的是数组 [rule, dest, match_groups]
+                if (result && result.length >= 2) {
+                    const [rule, dest, matchGroups] = result;
                     if (rule) {
                         resultDiv.innerHTML = `
                             <strong>匹配规则:</strong> ${rule.name}<br>
-                            <strong>转发目标:</strong> ${dest || '无匹配'}
+                            <strong>转发目标:</strong> ${dest || '无匹配'}<br>
+                            <strong>匹配组:</strong> ${matchGroups && matchGroups.length > 0 ? matchGroups.join(', ') : '无'}
                         `;
                     } else {
                         resultDiv.textContent = '无匹配规则';
