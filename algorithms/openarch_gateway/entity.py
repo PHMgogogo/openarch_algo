@@ -19,7 +19,7 @@ class UrlProxyRule(BaseModel):
     )
     order: int = -1
     rule_type: RuleType = RuleType.EXACT
-    pattern: str | re.Pattern = ""
+    pattern: str = ""
     dest_index: list[int] | None = None
     dest_format: str = None
     rewrite_host: str | None = None

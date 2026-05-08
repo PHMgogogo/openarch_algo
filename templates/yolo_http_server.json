@@ -9,5 +9,23 @@
     "restart_interval_seconds": 10,
     "id": "yolo_http_server",
     "is_temporary": false,
-    "volume": true
+    "volume": true,
+    "rules": [
+        {
+            "name": "yolo_http_server",
+            "order": 1,
+            "rule_type": "PREFIX",
+            "pattern": "/yolo",
+            "dest_index": [
+                1
+            ],
+            "dest_format": "%s",
+            "rewrite_host": "127.0.0.1:8003",
+            "editable": true,
+            "timeout": 60,
+            "enable": true,
+            "file_serve_root_path": null,
+            "default_entrance": "/yolo/docs"
+        }
+    ]
 }

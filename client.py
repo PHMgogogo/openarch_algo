@@ -11,6 +11,13 @@ PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8001/pm
 RULE_MANAGER_URL = os.getenv("RULE_MANAGER_URL", "http://127.0.0.1:8001/smgr")
 
 
+def _try_json(response):
+    try:
+        return response.json()
+    except:
+        return response.text
+
+
 class process:
     """Process manager operations for managing algorithms, templates and instances"""
 
@@ -23,7 +30,7 @@ class process:
             Returns:
                 dict: List of all algorithms
             """
-            return requests.get(f"{PROCESS_MANAGER_URL}/algorithms").json()
+            return _try_json(requests.get(f"{PROCESS_MANAGER_URL}/algorithms"))
 
         def info(id_or_prefix: str) -> dict:
             """Get information about a specific algorithm
@@ -31,9 +38,9 @@ class process:
             Args:
                 id_or_prefix: Algorithm ID or prefix to search
             """
-            return requests.get(
-                f"{PROCESS_MANAGER_URL}/algorithms/{id_or_prefix}"
-            ).json()
+            return _try_json(
+                requests.get(f"{PROCESS_MANAGER_URL}/algorithms/{id_or_prefix}")
+            )
 
         def upload(
             f: io.BufferedReader,
@@ -49,15 +56,17 @@ class process:
                 description: Description of the algorithm
                 auto_unpack_topdir: Auto-unpack if archive contains single top directory
             """
-            return requests.post(
-                f"{PROCESS_MANAGER_URL}/algorithms/upload",
-                files={"file": f},
-                data={
-                    "version": version,
-                    "description": description,
-                    "auto_unpack_topdir": auto_unpack_topdir,
-                },
-            ).json()
+            return _try_json(
+                requests.post(
+                    f"{PROCESS_MANAGER_URL}/algorithms/upload",
+                    files={"file": f},
+                    data={
+                        "version": version,
+                        "description": description,
+                        "auto_unpack_topdir": auto_unpack_topdir,
+                    },
+                )
+            )
 
         def cat(id_or_prefix: str, path: str = None) -> str:
             """Show content of a file within an algorithm
@@ -78,7 +87,7 @@ class process:
 
         def get() -> dict:
             """Get list of all templates"""
-            return requests.get(f"{PROCESS_MANAGER_URL}/templates").json()
+            return _try_json(requests.get(f"{PROCESS_MANAGER_URL}/templates"))
 
         def info(id_or_prefix: str) -> dict:
             """Get information about a specific template
@@ -86,9 +95,9 @@ class process:
             Args:
                 id_or_prefix: Template ID or prefix
             """
-            return requests.get(
-                f"{PROCESS_MANAGER_URL}/templates/{id_or_prefix}"
-            ).json()
+            return _try_json(
+                requests.get(f"{PROCESS_MANAGER_URL}/templates/{id_or_prefix}")
+            )
 
         def create(
             algorithm_id_or_prefix: str,
@@ -112,26 +121,28 @@ class process:
                 restart_interval_seconds: Wait seconds before restart
                 rules: List of environment rules
             """
-            return requests.post(
-                f"{PROCESS_MANAGER_URL}/templates",
-                json={
-                    "algorithm_id": algorithm_id_or_prefix,
-                    "id": id,
-                    "entry": entry,
-                    "restart_always": restart_always,
-                    "is_temporary": is_temporary,
-                    "volume": volume,
-                    "restart_interval_seconds": restart_interval_seconds,
-                    "rules": rules,
-                },
-            ).json()
+            return _try_json(
+                requests.post(
+                    f"{PROCESS_MANAGER_URL}/templates",
+                    json={
+                        "algorithm_id": algorithm_id_or_prefix,
+                        "id": id,
+                        "entry": entry,
+                        "restart_always": restart_always,
+                        "is_temporary": is_temporary,
+                        "volume": volume,
+                        "restart_interval_seconds": restart_interval_seconds,
+                        "rules": rules,
+                    },
+                )
+            )
 
     class instances:
         """Running instance management operations"""
 
         def get() -> dict:
             """Get list of all running instances"""
-            return requests.get(f"{PROCESS_MANAGER_URL}/instances").json()
+            return _try_json(requests.get(f"{PROCESS_MANAGER_URL}/instances"))
 
         def info(id_or_prefix: str) -> dict:
             """Get information about a specific instance
@@ -139,9 +150,9 @@ class process:
             Args:
                 id_or_prefix: Instance ID or prefix
             """
-            return requests.get(
-                f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}"
-            ).json()
+            return _try_json(
+                requests.get(f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}")
+            )
 
         def create(
             template_id_or_prefix: str, id: str = None, entry: str = None
@@ -153,14 +164,16 @@ class process:
                 id: Instance ID (generated automatically if not provided)
                 entry: Override the entry command from template
             """
-            return requests.post(
-                f"{PROCESS_MANAGER_URL}/instances",
-                json={
-                    "template_id": template_id_or_prefix,
-                    "id": id,
-                    "entry": entry,
-                },
-            ).json()
+            return _try_json(
+                requests.post(
+                    f"{PROCESS_MANAGER_URL}/instances",
+                    json={
+                        "template_id": template_id_or_prefix,
+                        "id": id,
+                        "entry": entry,
+                    },
+                )
+            )
 
         def stop(id_or_prefix: str) -> dict:
             """Stop a running instance
@@ -168,10 +181,12 @@ class process:
             Args:
                 id_or_prefix: Instance ID or prefix to stop
             """
-            return requests.post(
-                f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/stop",
-                json={"force": False},
-            ).json()
+            return _try_json(
+                requests.post(
+                    f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/stop",
+                    json={"force": False},
+                )
+            )
 
         def delete(id_or_prefix: str) -> dict:
             """Delete a stopped instance
@@ -179,9 +194,9 @@ class process:
             Args:
                 id_or_prefix: Instance ID or prefix to delete
             """
-            return requests.delete(
-                f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}"
-            ).json()
+            return _try_json(
+                requests.delete(f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}")
+            )
 
         def connections(id_or_prefix: str) -> dict:
             """Get connection information for a specific instance
@@ -189,9 +204,11 @@ class process:
             Args:
                 id_or_prefix: Instance ID or prefix
             """
-            return requests.get(
-                f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/connections"
-            ).json()
+            return _try_json(
+                requests.get(
+                    f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/connections"
+                )
+            )
 
         class logs:
             """Log access operations"""
@@ -202,9 +219,11 @@ class process:
                 Args:
                     id_or_prefix: Instance ID or prefix
                 """
-                return requests.get(
-                    f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/logs/out"
-                ).json()
+                return _try_json(
+                    requests.get(
+                        f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/logs/out"
+                    )
+                )
 
             def err(id_or_prefix: str) -> str:
                 """Get stderr from instance
@@ -212,9 +231,11 @@ class process:
                 Args:
                     id_or_prefix: Instance ID or prefix
                 """
-                return requests.get(
-                    f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/logs/err"
-                ).json()
+                return _try_json(
+                    requests.get(
+                        f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/logs/err"
+                    )
+                )
 
 
 class service:
@@ -222,7 +243,7 @@ class service:
 
     def get() -> dict:
         """Get list of all routing rules"""
-        return requests.get(f"{RULE_MANAGER_URL}/rules").json()
+        return _try_json(requests.get(f"{RULE_MANAGER_URL}/rules"))
 
     def delete(name: str):
         """Delete a routing rule by name
@@ -230,7 +251,7 @@ class service:
         Args:
             name: Name of the rule to delete
         """
-        return requests.delete(f"{RULE_MANAGER_URL}/rules/{name}").json()
+        return _try_json(requests.delete(f"{RULE_MANAGER_URL}/rules/{name}"))
 
     def update(
         name: str,
@@ -258,21 +279,23 @@ class service:
             enable: Enable or disable this rule
             file_serve_root_path: Root path for static file serving
         """
-        return requests.put(
-            f"{RULE_MANAGER_URL}/rules",
-            json={
-                "name": name,
-                "order": order,
-                "rule_type": rule_type,
-                "pattern": pattern,
-                "dest_index": dest_index,
-                "rewrite_host": rewrite_host,
-                "editable": editable,
-                "timeout": timeout,
-                "enable": enable,
-                "file_serve_root_path": file_serve_root_path,
-            },
-        ).json()
+        return _try_json(
+            requests.put(
+                f"{RULE_MANAGER_URL}/rules",
+                json={
+                    "name": name,
+                    "order": order,
+                    "rule_type": rule_type,
+                    "pattern": pattern,
+                    "dest_index": dest_index,
+                    "rewrite_host": rewrite_host,
+                    "editable": editable,
+                    "timeout": timeout,
+                    "enable": enable,
+                    "file_serve_root_path": file_serve_root_path,
+                },
+            )
+        )
 
     def add(
         name: str,
@@ -280,11 +303,13 @@ class service:
         rule_type: Literal["EXACT", "PREFIX", "REGEX"] = "EXACT",
         pattern: str = "",
         dest_index: list[int] = [],
+        dest_format: str = "",
         rewrite_host: str = None,
         editable: bool = True,
         timeout: float = None,
         enable: bool = True,
         file_serve_root_path: str = None,
+        default_entrance: str = None,
     ):
         """Add a new routing rule
 
@@ -300,21 +325,25 @@ class service:
             enable: Enable or disable this rule
             file_serve_root_path: Root path for static file serving
         """
-        return requests.post(
-            f"{RULE_MANAGER_URL}/rules",
-            json={
-                "name": name,
-                "order": order,
-                "rule_type": rule_type,
-                "pattern": pattern,
-                "dest_index": dest_index,
-                "rewrite_host": rewrite_host,
-                "editable": editable,
-                "timeout": timeout,
-                "enable": enable,
-                "file_serve_root_path": file_serve_root_path,
-            },
-        ).json()
+        return _try_json(
+            requests.post(
+                f"{RULE_MANAGER_URL}/rules",
+                json={
+                    "name": name,
+                    "order": order,
+                    "rule_type": rule_type,
+                    "pattern": pattern,
+                    "dest_index": dest_index,
+                    "dest_format": dest_format,
+                    "rewrite_host": rewrite_host,
+                    "editable": editable,
+                    "timeout": timeout,
+                    "enable": enable,
+                    "file_serve_root_path": file_serve_root_path,
+                    "default_entrance": default_entrance,
+                },
+            )
+        )
 
     def match(path: str):
         """Match a path against existing rules
@@ -322,10 +351,12 @@ class service:
         Args:
             path: Path to match (e.g. /api/foo)
         """
-        return requests.post(
-            f"{RULE_MANAGER_URL}/rules/match",
-            json={"path": path},
-        ).json()
+        return _try_json(
+            requests.post(
+                f"{RULE_MANAGER_URL}/rules/match",
+                json={"path": path},
+            )
+        )
 
     def preview(name: str, path: str):
         """Preview how a rule matches a given path
@@ -334,10 +365,12 @@ class service:
             name: Name of the rule to test
             path: Path to match against
         """
-        return requests.post(
-            f"{RULE_MANAGER_URL}/rules/{name}/preview",
-            json={"path": path},
-        ).json()
+        return _try_json(
+            requests.post(
+                f"{RULE_MANAGER_URL}/rules/{name}/preview",
+                json={"path": path},
+            )
+        )
 
     def test(
         path: str,
@@ -369,25 +402,27 @@ class service:
             enable: Enable or disable this rule
             file_serve_root_path: Root path for static file serving
         """
-        return requests.post(
-            f"{RULE_MANAGER_URL}/rules/test",
-            json={
-                "path": path,
-                "host": host,
-                "upr": {
-                    "name": name,
-                    "order": order,
-                    "rule_type": rule_type,
-                    "pattern": pattern,
-                    "dest_index": dest_index,
-                    "rewrite_host": rewrite_host,
-                    "editable": editable,
-                    "timeout": timeout,
-                    "enable": enable,
-                    "file_serve_root_path": file_serve_root_path,
+        return _try_json(
+            requests.post(
+                f"{RULE_MANAGER_URL}/rules/test",
+                json={
+                    "path": path,
+                    "host": host,
+                    "upr": {
+                        "name": name,
+                        "order": order,
+                        "rule_type": rule_type,
+                        "pattern": pattern,
+                        "dest_index": dest_index,
+                        "rewrite_host": rewrite_host,
+                        "editable": editable,
+                        "timeout": timeout,
+                        "enable": enable,
+                        "file_serve_root_path": file_serve_root_path,
+                    },
                 },
-            },
-        ).json()
+            )
+        )
 
 
 def _parse_docstring(docstring: str) -> tuple[str, dict[str, str]]:

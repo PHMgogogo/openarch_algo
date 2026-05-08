@@ -317,18 +317,7 @@ class Instance:
 
     async def get_ready(self):
         for rule in self.template.rules:
-            service.add(
-                name=rule.name,
-                order=rule.order,
-                rule_type=rule.rule_type,
-                pattern=rule.pattern,
-                dest_index=rule.dest_index,
-                rewrite_host=rule.rewrite_host,
-                editable=rule.editable,
-                timeout=rule.timeout,
-                enable=rule.enable,
-                file_serve_root_path=rule.file_serve_root_path,
-            )
+            service.add(**rule.model_dump())
         if self.template.volume:
             await softlink_dir_platform(self.template.algorithm.path, self.path)
         else:
