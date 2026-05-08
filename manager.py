@@ -9,6 +9,7 @@ import uuid
 import psutil
 from client import service
 
+
 def unsafe_peek(stream_reader: asyncio.StreamReader) -> int:
     if stream_reader and stream_reader._buffer:
         return len(stream_reader._buffer)
@@ -93,6 +94,11 @@ class ProcessManager:
     async def remove_instance(self, id_or_prefix: str, force: bool = False) -> None:
         instance = self.get_instance(id_or_prefix)
         await self.stop(instance.id, force)
+        for rule in instance.template.rules:
+            try:
+                service.delete(rule.name)
+            except:
+                pass
         await instance.clear()
         del self.instances[instance.id]
         del self.processes[instance.id]

@@ -331,13 +331,10 @@ class Instance:
 
     async def clear(self):
         await self.log.clear()
-        for rule in self.template.rules:
-            try:
-                service.delete(rule.name)
-            except:
-                pass
-
-        if self.template.volume:
-            await unlink_dir_platform(self.path)
-        else:
-            shutil.rmtree(self.path)
+        try:
+            if self.template.volume:
+                await unlink_dir_platform(self.path)
+            else:
+                shutil.rmtree(self.path)
+        except:
+            pass
