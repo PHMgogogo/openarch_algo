@@ -11,11 +11,12 @@ PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8001/pm
 RULE_MANAGER_URL = os.getenv("RULE_MANAGER_URL", "http://127.0.0.1:8001/smgr")
 
 
-def _try_json(response):
-    try:
-        return response.json()
-    except:
+def auto(response: requests.Response):
+    content_type = response.headers.get("Content-Type", "")
+    if "application/json" not in content_type.lower():
         return response.text
+        # return {"data": response.text, "msg": "response type is text"}
+    return response.json()
 
 
 class process:
@@ -30,7 +31,7 @@ class process:
             Returns:
                 dict: List of all algorithms
             """
-            return _try_json(requests.get(f"{PROCESS_MANAGER_URL}/algorithms"))
+            return auto(requests.get(f"{PROCESS_MANAGER_URL}/algorithms"))
 
         def info(id_or_prefix: str) -> dict:
             """Get information about a specific algorithm
@@ -38,7 +39,7 @@ class process:
             Args:
                 id_or_prefix: Algorithm ID or prefix to search
             """
-            return _try_json(
+            return auto(
                 requests.get(f"{PROCESS_MANAGER_URL}/algorithms/{id_or_prefix}")
             )
 
@@ -56,7 +57,7 @@ class process:
                 description: Description of the algorithm
                 auto_unpack_topdir: Auto-unpack if archive contains single top directory
             """
-            return _try_json(
+            return auto(
                 requests.post(
                     f"{PROCESS_MANAGER_URL}/algorithms/upload",
                     files={"file": f},
@@ -68,26 +69,45 @@ class process:
                 )
             )
 
-        def cat(id_or_prefix: str, path: str = None) -> str:
+        def cat(
+            id_or_prefix: str,
+            path: str = None,
+            offset: int = 0,
+            length: int = 1024,
+            encoding: Literal["b64img"] | str = "utf-8",
+            fmt: str = None,
+        ):
             """Show content of a file within an algorithm
 
             Args:
                 id_or_prefix: Algorithm ID or prefix
                 path: Path to file inside algorithm, show info if None
+                offset: Start reading from this byte position
+                length: Number of bytes to read, -1 for entire file
+                encoding: Encoding for text content, use "b64img" for image to base64 conversion
+                fmt: Output format for image conversion: jpg,jpeg,png,gif,webp,bmp,tiff,tif,ico,dib,icns,sgi,j2c,j2k,jp2,jpc,jpf,jpx
             """
             if path is None:
                 return __class__.info(id_or_prefix)
-            return requests.post(
-                f"{PROCESS_MANAGER_URL}/algorithms/{id_or_prefix}/cat",
-                json={"path": path},
-            ).text.replace("\r\n", "\n")
+            return auto(
+                requests.post(
+                    f"{PROCESS_MANAGER_URL}/algorithms/{id_or_prefix}/cat",
+                    json={
+                        "path": path,
+                        "offset": offset,
+                        "length": length,
+                        "encoding": encoding,
+                        "fmt": fmt,
+                    },
+                )
+            )
 
     class templates:
         """Template management operations"""
 
         def get() -> dict:
             """Get list of all templates"""
-            return _try_json(requests.get(f"{PROCESS_MANAGER_URL}/templates"))
+            return auto(requests.get(f"{PROCESS_MANAGER_URL}/templates"))
 
         def info(id_or_prefix: str) -> dict:
             """Get information about a specific template
@@ -95,9 +115,7 @@ class process:
             Args:
                 id_or_prefix: Template ID or prefix
             """
-            return _try_json(
-                requests.get(f"{PROCESS_MANAGER_URL}/templates/{id_or_prefix}")
-            )
+            return auto(requests.get(f"{PROCESS_MANAGER_URL}/templates/{id_or_prefix}"))
 
         def create(
             algorithm_id_or_prefix: str,
@@ -121,7 +139,7 @@ class process:
                 restart_interval_seconds: Wait seconds before restart
                 rules: List of environment rules
             """
-            return _try_json(
+            return auto(
                 requests.post(
                     f"{PROCESS_MANAGER_URL}/templates",
                     json={
@@ -137,12 +155,17 @@ class process:
                 )
             )
 
+        def delete(id_or_prefix: str) -> dict:
+            return auto(
+                requests.delete(f"{PROCESS_MANAGER_URL}/templates/{id_or_prefix}")
+            )
+
     class instances:
         """Running instance management operations"""
 
         def get() -> dict:
             """Get list of all running instances"""
-            return _try_json(requests.get(f"{PROCESS_MANAGER_URL}/instances"))
+            return auto(requests.get(f"{PROCESS_MANAGER_URL}/instances"))
 
         def info(id_or_prefix: str) -> dict:
             """Get information about a specific instance
@@ -150,9 +173,7 @@ class process:
             Args:
                 id_or_prefix: Instance ID or prefix
             """
-            return _try_json(
-                requests.get(f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}")
-            )
+            return auto(requests.get(f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}"))
 
         def create(
             template_id_or_prefix: str, id: str = None, entry: str = None
@@ -164,7 +185,7 @@ class process:
                 id: Instance ID (generated automatically if not provided)
                 entry: Override the entry command from template
             """
-            return _try_json(
+            return auto(
                 requests.post(
                     f"{PROCESS_MANAGER_URL}/instances",
                     json={
@@ -175,13 +196,46 @@ class process:
                 )
             )
 
+        def cat(
+            id_or_prefix: str,
+            path: str = None,
+            offset: int = 0,
+            length: int = 1024,
+            encoding: Literal["b64img"] | str = "utf-8",
+            fmt: str = None,
+        ):
+            """Show content of a file within an instance
+
+            Args:
+                id_or_prefix: Instance ID or prefix
+                path: Path to file inside instance, show info if None
+                offset: Start reading from this byte position
+                length: Number of bytes to read, -1 for entire file
+                encoding: Encoding for text content, use "b64img" for image to base64 conversion
+                fmt: Output format for image conversion: jpg,jpeg,png,gif,webp,bmp,tiff,tif,ico,dib,icns,sgi,j2c,j2k,jp2,jpc,jpf,jpx
+            """
+            if path is None:
+                return __class__.info(id_or_prefix)
+            return auto(
+                requests.post(
+                    f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/cat",
+                    json={
+                        "path": path,
+                        "offset": offset,
+                        "length": length,
+                        "encoding": encoding,
+                        "fmt": fmt,
+                    },
+                )
+            )
+
         def stop(id_or_prefix: str) -> dict:
             """Stop a running instance
 
             Args:
                 id_or_prefix: Instance ID or prefix to stop
             """
-            return _try_json(
+            return auto(
                 requests.post(
                     f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/stop",
                     json={"force": False},
@@ -194,7 +248,7 @@ class process:
             Args:
                 id_or_prefix: Instance ID or prefix to delete
             """
-            return _try_json(
+            return auto(
                 requests.delete(f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}")
             )
 
@@ -204,7 +258,7 @@ class process:
             Args:
                 id_or_prefix: Instance ID or prefix
             """
-            return _try_json(
+            return auto(
                 requests.get(
                     f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/connections"
                 )
@@ -219,7 +273,7 @@ class process:
                 Args:
                     id_or_prefix: Instance ID or prefix
                 """
-                return _try_json(
+                return auto(
                     requests.get(
                         f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/logs/out"
                     )
@@ -231,7 +285,7 @@ class process:
                 Args:
                     id_or_prefix: Instance ID or prefix
                 """
-                return _try_json(
+                return auto(
                     requests.get(
                         f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}/logs/err"
                     )
@@ -243,7 +297,7 @@ class service:
 
     def get() -> dict:
         """Get list of all routing rules"""
-        return _try_json(requests.get(f"{RULE_MANAGER_URL}/rules"))
+        return auto(requests.get(f"{RULE_MANAGER_URL}/rules"))
 
     def delete(name: str):
         """Delete a routing rule by name
@@ -251,7 +305,7 @@ class service:
         Args:
             name: Name of the rule to delete
         """
-        return _try_json(requests.delete(f"{RULE_MANAGER_URL}/rules/{name}"))
+        return auto(requests.delete(f"{RULE_MANAGER_URL}/rules/{name}"))
 
     def update(
         name: str,
@@ -279,7 +333,7 @@ class service:
             enable: Enable or disable this rule
             file_serve_root_path: Root path for static file serving
         """
-        return _try_json(
+        return auto(
             requests.put(
                 f"{RULE_MANAGER_URL}/rules",
                 json={
@@ -311,7 +365,7 @@ class service:
         file_serve_root_path: str = None,
         default_entrance: str = None,
     ):
-        """Add a new routing rule
+        """Add or update a routing rule
 
         Args:
             name: Name of the new rule
@@ -325,8 +379,8 @@ class service:
             enable: Enable or disable this rule
             file_serve_root_path: Root path for static file serving
         """
-        return _try_json(
-            requests.post(
+        return auto(
+            requests.put(
                 f"{RULE_MANAGER_URL}/rules",
                 json={
                     "name": name,
@@ -351,7 +405,7 @@ class service:
         Args:
             path: Path to match (e.g. /api/foo)
         """
-        return _try_json(
+        return auto(
             requests.post(
                 f"{RULE_MANAGER_URL}/rules/match",
                 json={"path": path},
@@ -365,7 +419,7 @@ class service:
             name: Name of the rule to test
             path: Path to match against
         """
-        return _try_json(
+        return auto(
             requests.post(
                 f"{RULE_MANAGER_URL}/rules/{name}/preview",
                 json={"path": path},
@@ -402,7 +456,7 @@ class service:
             enable: Enable or disable this rule
             file_serve_root_path: Root path for static file serving
         """
-        return _try_json(
+        return auto(
             requests.post(
                 f"{RULE_MANAGER_URL}/rules/test",
                 json={

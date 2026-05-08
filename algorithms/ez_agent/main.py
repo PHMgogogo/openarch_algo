@@ -48,29 +48,46 @@ class LLMConfig:
 LLMConfig.instance = LLMConfig()
 
 
-@dataclass
+class TextContent(TypedDict):
+    text: str = ""
+    type: Literal["input_text"] = "input_text"
+
+
+class ImageContent(TypedDict):
+    image_url: str = ""
+    type: Literal["input_image"] = "input_image"
+
+
+def text_content(item) -> TextContent:
+    return TextContent(text=item, type="input_text")
+
+
+def image_content(item) -> ImageContent:
+    return ImageContent(image_url=item, type="input_image")
+
+
 class ContextItem(TypedDict):
-    role: Literal["user", "assistant", "system", "tool"]
-    content: str
-    tool_call_id: str | None = None
+    role: Literal["user", "assistant", "system"] = "system"
+    content: list[TextContent | ImageContent] = None
 
 
-Context: TypeAlias = list[ContextItem]
+class FunctionContextItem(TypedDict):
+    type: Literal["function_call_output"] = "function_call_output"
+    call_id: str
+    output: str
+
+
+Context: TypeAlias = list[ContextItem | FunctionContextItem]
 
 
 class EzcliParams(BaseModel):
     args: str = "-h"
 
 
-class OpenAITool(BaseModel):
-    type: Literal["function"] = "function"
-    function: openai.types.FunctionDefinition
-
-
 class Function(BaseModel):
     arguments: dict | str | None = None
     name: str | None = None
-    tool_call_id: str | None = None
+    call_id: str | None = None
 
 
 class ToolCall(BaseModel):
@@ -80,64 +97,58 @@ class ToolCall(BaseModel):
     type: Literal["function"] = "function"
 
 
+class OpenAITool(BaseModel):
+    type: Literal["function"] = "function"
+    name: str
+    description: str
+    parameters: openai.types.FunctionParameters
+    strict: bool = True
+
+
 tool = OpenAITool(
-    function=openai.types.FunctionDefinition(
-        name="ezcli",
-        description="ezcli",
-        parameters=EzcliParams().model_json_schema(),
-        strict=True,
-    )
+    name="ezcli",
+    description="ezcli",
+    parameters=EzcliParams().model_json_schema(),
 )
 
 
 async def llm_response(
-    context: Context = [ContextItem(role="user", content="hello")],
+    context: Context = None,
     extra_body: dict[str, Any] = {"thinking": {"type": "disabled"}},
     llm_config: LLMConfig = LLMConfig.instance,
 ) -> AsyncGenerator[str | Function, None]:
+    if context is None:
+        context = [ContextItem("user", [text_content("hello")])]
     client = openai.AsyncOpenAI(
         api_key=llm_config.api_key, base_url=llm_config.base_url
     )
-
-    stream = await client.chat.completions.create(
+    stream = await client.responses.create(
         model=llm_config.model_name,
-        messages=context,
+        input=context,
         stream=True,
         extra_body=extra_body,
         tools=[tool.model_dump()],
         tool_choice="auto",
     )
-    tool_call_result = dict[int, Function]()
-    async for chunk in stream:
-        if not chunk.choices:
-            continue
-        delta = chunk.choices[0].delta
-        if delta.tool_calls is not None and len(delta.tool_calls) > 0:
-            for item in delta.tool_calls:
-                item: ToolCall = item
-                if item.index not in tool_call_result:
-                    tool_call_result[item.index] = Function(
-                        name=item.function.name,
-                        arguments=item.function.arguments,
-                        tool_call_id=item.id,
-                    )
-                else:
-                    if item.function.name != None:
-                        tool_call_result[item.index].name += item.function.name
-                    tool_call_result[item.index].arguments += item.function.arguments
-        elif delta.content:
-            yield delta.content
-        else:
-            for fn in tool_call_result.values():
-                fn.arguments = json.loads(fn.arguments)
-            yield list(tool_call_result.values())
+    async for event in stream:
+        if event.type == "response.output_text.delta":
+            yield event.delta
+        elif event.type == "response.output_item.done":
+            if event.item.type == "function_call":
+                yield Function(
+                    name=event.item.name,
+                    call_id=event.item.call_id,
+                    arguments=json.loads(event.item.arguments),
+                )
+        # elif event.type == "response.completed":
+        #     if tool_call_result:
+        #         yield list(tool_call_result.values())
 
 
 def add_context_to(
     context: Context = None,
-    role: str = Literal["system", "assistant", "user", "tool"],
-    content: str = "",
-    tool_call_id: str = None,
+    role: Literal["system", "assistant", "user"] = "system",
+    content: list[TextContent | ImageContent] = None,
     copy: bool = False,
 ) -> Context:
     if context is None:
@@ -145,7 +156,23 @@ def add_context_to(
     elif copy:
         context = context.copy()
     citem = ContextItem(role=role, content=content)
-    citem["tool_call_id"] = tool_call_id
+    context.append(citem)
+    return context
+
+
+def add_f_context_to(
+    context: Context = None,
+    call_id: str = "",
+    content: str = "",
+    copy: bool = False,
+) -> Context:
+    if context is None:
+        context = []
+    elif copy:
+        context = context.copy()
+    citem = FunctionContextItem(
+        type="function_call_output", call_id=call_id, output=content
+    )
     context.append(citem)
     return context
 
@@ -155,77 +182,114 @@ def load_prompt_to(
 ) -> Context:
     prompt = open(path, encoding="utf-8").read()
     prompt = prompt.replace("{{EZCLI_DOC}}", ezcli_doc)
-    return add_context_to(context, "system", prompt)
+    return add_context_to(context, "system", [text_content(prompt)])
 
 
 async def _single_progress(
     user_input: str, context: Context = None
 ) -> AsyncGenerator[tuple[str, str, Context], None]:
     dump = True
-    context = add_context_to(context, "user", user_input)
+    context = add_context_to(context, "user", [text_content(user_input)])
     yield None, None, context
+
     output_str: str = ""
-    while True:
-        tool_output: str = ""
+    should_response_again: bool = True
+    while should_response_again:
         delta_str: str = ""
-        should_response_again: bool = False
+        should_response_again = False
         async for delta in llm_response(context):
-            if isinstance(delta, list):
-                for func in delta:
-                    if not isinstance(func, Function) or not func.name == "ezcli":
-                        continue
-                    args = EzcliParams.model_validate(func.arguments).args
-                    should_response_again = True
-                    raw_cmd = func.name + " " + args
-                    cmd = "python client.py " + args
-                    invoked_str = f"\n**已调用** `{raw_cmd}`\n\n"
-                    delta_str = invoked_str
-                    output_str += delta_str
-                    env = os.environ.copy()
-                    env.update({"PYTHONENCODING": "utf-8", "PYTHONUTF8": "1"})
-                    proc = await asyncio.create_subprocess_shell(
-                        cmd,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        env=env,
-                    )
-                    stdout_data, stderr_data = await proc.communicate()
-                    if proc.returncode == 0:
-                        # tool_output += f"\n```{raw_cmd}\n"
-                        if stdout_data is not None:
-                            stdout_str = stdout_data.decode("utf-8")
+            cat_content = None
+            if isinstance(delta, Function):
+                func = delta
+                if not func.name == "ezcli":
+                    continue
+                tool_output: str = ""
+                args = EzcliParams.model_validate(func.arguments).args
+                should_response_again = True
+                raw_cmd = func.name + " " + args
+                cmd = "python client.py " + args
+                invoked_str = f"\n**已调用** `{raw_cmd}`\n\n"
+                delta_str = invoked_str
+                output_str += delta_str
+                # yield output_str, delta_str, context
+                add_context_to(context, "assistant", [text_content(output_str)])
+                yield None, None, context
+                output_str = ""
+                env = os.environ.copy()
+                env.update({"PYTHONENCODING": "utf-8", "PYTHONUTF8": "1"})
+                proc = await asyncio.create_subprocess_shell(
+                    cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    limit=1024 * 1024 * 20,  # 20MB
+                    env=env,
+                )
+                stdout_data, stderr_data = await proc.communicate()
+                if proc.returncode == 0:
+                    tool_output += f"\n```{raw_cmd}\n"
+                    if stdout_data is not None:
+                        stdout_str = stdout_data.decode("utf-8")
+                        is_cat = False
+                        try:
+                            out_obj = json.loads(stdout_str)
+                            file_type = out_obj.get("file_type")
+                            if file_type in ["image", "text"]:
+                                is_cat = True
+                                data = out_obj["chunk_content"]
+                                del out_obj["chunk_content"]
+                                tool_output += json.dumps(out_obj)
+                                tool_output += "\n```\n"
+                                if file_type == "image":
+                                    cat_content = image_content(data)
+                                else:
+                                    cat_content = text_content(
+                                        data[-EXECUTE_OUTPUT_MAX_LEN:]
+                                    )
+                        except:
+                            pass
+                        if not is_cat:
                             tool_output += stdout_str[-EXECUTE_OUTPUT_MAX_LEN:]
-                        # tool_output += "```\n"
-                    else:
-                        tool_output += f"\n```{raw_cmd}\n"
-                        if stderr_data is not None:
-                            stderr_str = stderr_data.decode("utf-8")
-                            tool_output += stderr_str[-EXECUTE_OUTPUT_MAX_LEN:]
-                        tool_output += "```\n"
+                            tool_output += "```\n"
+                    # tool_output += "```\n"
+                else:
+                    tool_output += f"\n```{raw_cmd}\n"
+                    if stderr_data is not None:
+                        stderr_str = stderr_data.decode("utf-8")
+                        tool_output += stderr_str[-EXECUTE_OUTPUT_MAX_LEN:]
+                    tool_output += "```\n"
+                add_f_context_to(context, func.call_id, tool_output)
+                if cat_content is not None:
                     add_context_to(
                         context,
-                        "tool",
-                        tool_output,
-                        func.tool_call_id,
+                        "system",
+                        [text_content("你所查看的文件内容如下："), cat_content],
                     )
-                    add_context_to(context, "system", "继续")
+                else:
+                    add_context_to(context, "system", [text_content("继续")])
+                    # pass
             else:
                 delta_str = delta
                 output_str += delta_str
                 yield output_str, delta_str, context
-            if should_response_again:
-                break
-        context = add_context_to(context, "assistant", output_str)
-        yield None, None, context
         if not should_response_again:
-            break
+            context = add_context_to(context, "assistant", [text_content(output_str)])
+            yield None, None, context
     if dump:
         with open("dump.md", "w", encoding="utf-8") as f:
             for item in context:
-                f.write(f"# {item['role']}\n")
-                f.write(item["content"])
+                if "role" in item:
+                    item: ContextItem
+                    f.write(f"# {item['role']}\n")
+                    for c in item["content"]:
+                        for k, v in c.items():
+                            f.write(f"## {k}\n")
+                            f.write(f"{v}\n")
+                        f.write("\n")
+                else:
+                    item: FunctionContextItem
+                    f.write(f"# {item['call_id']}\n")
+                    f.write(item["output"])
                 f.write("\n")
-    return
 
 
 async def single_progress(user_input: str, context: Context = None) -> None:
@@ -236,8 +300,10 @@ async def single_progress(user_input: str, context: Context = None) -> None:
         ):
             if output:
                 live.update(Markdown(output))
-            else:
-                pass
+            elif context[-1]["role"] in "assistant":
+                live.update("")
+                for item in context[-1]["content"]:
+                    live.console.print(Markdown(item["text"]))
 
         # elif context[-1]["role"] == "assistant":
         #     live.console.print(context[-1]["content"])
@@ -248,16 +314,10 @@ def single_progress_headless(user_input: str, context: Context = None):
 
 
 async def cli():
-    dump = False
     context = load_prompt_to(ezcli_doc=client.doc("ezcli"))
     while True:
         user_input = input("\nUser: ")
         await single_progress(user_input, context)
-        if dump:
-            md = open("context.md", "w", encoding="utf-8")
-            for item in context:
-                md.write(f"# {item['role']}\n")
-                md.write(f"{item['content']}\n")
 
 
 app = FastAPI()

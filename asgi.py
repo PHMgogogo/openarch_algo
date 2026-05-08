@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Literal
 import asyncio
 from contextlib import asynccontextmanager
 from manager import ProcessManager, AsyncIOWrapper
@@ -44,7 +44,7 @@ class CreateTemplateRequest(BaseModel):
     is_temporary: bool = False
     volume: bool = False
     restart_interval_seconds: Optional[float] = 10
-    rules: Optional[List[UrlProxyRule]] = None
+    rules: Optional[list[UrlProxyRule]] = None
 
 
 class CreateInstanceRequest(BaseModel):
@@ -55,6 +55,14 @@ class CreateInstanceRequest(BaseModel):
 
 class PathRequest(BaseModel):
     path: str
+
+
+class CatRequest(BaseModel):
+    path: str
+    offset: int = 0
+    length: int = 0
+    encoding: Literal["b64img"] | str = "utf-8"
+    fmt: Optional[str] = None
 
 
 class InstanceResponse(BaseModel):
@@ -150,8 +158,13 @@ async def upload_algorithm(
 
 
 @app.post("/algorithms/{algorithm_id}/cat")
-async def cat_algorithm_file(algorithm_id: str, path_request: PathRequest):
-    return await pm.cat(algorithm_id, path_request.path)
+async def cat_algorithm_file(algorithm_id: str, cat_request: CatRequest):
+    return await pm.cat("algorithm", algorithm_id, **cat_request.model_dump())
+
+
+@app.post("/instances/{instance_id}/cat")
+async def cat_algorithm_file(instance_id: str, cat_request: CatRequest):
+    return await pm.cat("instance", instance_id, **cat_request.model_dump())
 
 
 @app.get("/templates")
@@ -233,6 +246,7 @@ async def get_instance(instance_id: str):
         "status": instance.status.name,
         "template_id": instance.template.id,
         "logs": {"out": instance.log.out_path, "err": instance.log.err_path},
+        "tree": instance.tree(),
     }
 
 

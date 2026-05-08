@@ -99,6 +99,28 @@
             color: #666;
         }
 
+        .message table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 8px 0;
+        }
+
+        .message table th,
+        .message table td {
+            border: 1px solid #ccc;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .message table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        .message table tr:nth-child(even) {
+            background: #fafafa;
+        }
+
         .input-container {
             background: white;
             padding: 16px 24px;
@@ -405,6 +427,22 @@
             }
         });
 
+        function renderContentItems(content, role) {
+            if (typeof content === 'string') {
+                if (content.trim()) {
+                    addMessage(role, content);
+                }
+                return;
+            }
+            if (Array.isArray(content)) {
+                for (const item of content) {
+                    if (item.text) {
+                        addMessage(role, item.text);
+                    }
+                }
+            }
+        }
+
         async function sendMessage() {
             const message = userInput.value.trim();
             if (!message || isLoading) return;
@@ -434,34 +472,120 @@
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
 
+                let buffer = '';
+
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
 
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n\n');
-
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const jsonStr = line.slice(6).trim();
-                            if (!jsonStr) continue;
-
+                    // 流结束
+                    if (done) {
+                        // 尝试处理 buffer 中最后残留的数据
+                        if (buffer.trim()) {
                             try {
-                                const data = JSON.parse(jsonStr);
-                                if (Array.isArray(data)) {
-                                    context = data;
-                                } else if (data.output) {
-                                    assistantContent = data.output;
-                                    if (!currentAssistantMessage) {
-                                        typingIndicator.classList.remove('active');
-                                        addMessage('assistant', assistantContent, true);
-                                    } else {
-                                        updateStreamingMessage(assistantContent);
+                                const line = buffer.trim();
+
+                                if (line.startsWith('data: ')) {
+                                    const jsonStr = line.slice(6).trim();
+
+                                    if (jsonStr) {
+                                        const data = JSON.parse(jsonStr);
+                                        console.log('最后残留数据:', data);
                                     }
                                 }
                             } catch (e) {
-                                console.error('解析失败:', jsonStr, e);
+                                console.error('最后 buffer 解析失败:', buffer, e);
                             }
+                        }
+
+                        break;
+                    }
+
+                    // 正确处理 UTF-8 流
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // SSE 消息以 \n\n 分隔
+                    const messages = buffer.split('\n\n');
+
+                    // 最后一段可能不完整，留到下一轮
+                    buffer = messages.pop() || '';
+
+                    for (const message of messages) {
+                        const line = message.trim();
+
+                        if (!line) continue;
+
+                        if (!line.startsWith('data: ')) {
+                            console.log('忽略非 data 消息:', line);
+                            continue;
+                        }
+
+                        const jsonStr = line.slice(6).trim();
+
+                        if (!jsonStr) continue;
+
+                        // SSE 心跳包
+                        if (jsonStr === '[DONE]') {
+                            console.log('流结束标记');
+                            continue;
+                        }
+
+                        try {
+                            const data = JSON.parse(jsonStr);
+
+                            console.log('收到数据:', data);
+
+                            // 流式 output
+                            if (data.output !== undefined && data.output !== null) {
+
+                                console.log('处理 output:', data.output);
+
+                                assistantContent = data.output;
+
+                                if (!currentAssistantMessage) {
+
+                                    typingIndicator.classList.remove('active');
+
+                                    addMessage('assistant', assistantContent, true);
+
+                                } else {
+
+                                    updateStreamingMessage(assistantContent);
+                                }
+
+                            }
+                            // context 数组
+                            else if (Array.isArray(data)) {
+
+                                console.log('处理 context 数组:', data);
+
+                                context = data;
+
+                                const lastMessage = context[context.length - 1];
+
+                                if (lastMessage && lastMessage.role === 'assistant') {
+
+                                    typingIndicator.classList.remove('active');
+
+                                    if (currentAssistantMessage) {
+
+                                        currentAssistantMessage.remove();
+
+                                        currentAssistantMessage = null;
+
+                                        assistantContent = '';
+                                    }
+
+                                    renderContentItems(lastMessage.content, 'assistant');
+                                }
+
+                            } else {
+
+                                console.log('未匹配的数据类型:', data);
+                            }
+
+                        } catch (e) {
+
+                            console.error('JSON解析失败:', jsonStr, e);
                         }
                     }
                 }

@@ -15,12 +15,20 @@ import typing
 import socket
 
 
-def folder_to_list(path: str):
+class FileMetaInfo(BaseModel):
+    file_offset: int = 0
+    file_chunk_length: int = 0
+    file_total_length: int = 0
+    file_type: typing.Literal["text", "image"] = "text"
+    chunk_content: str = ""
+
+
+def folder_to_dict(path: str):
     result = {}
     for entry in sorted(os.listdir(path)):
         full_path = os.path.join(path, entry)
         if os.path.isdir(full_path):
-            result[entry] = folder_to_list(full_path)
+            result[entry] = folder_to_dict(full_path)
         else:
             result[entry] = None
     return result
@@ -47,7 +55,7 @@ class Algorithm(BaseModel):
         )
 
     def tree(self):
-        return folder_to_list(self.path)
+        return folder_to_dict(self.path)
 
     @property
     def path(self):
@@ -68,9 +76,22 @@ class Algorithm(BaseModel):
             encoding="utf-8",
         ).write(self.model_dump_json(indent=4, ensure_ascii=False))
 
-    async def cat(self, path: str, max_len: int = 20480) -> bytes:
-        f = await aiofiles.open(os.path.join(self.path, path), "rb")
-        return await f.read(max_len)
+    async def cat(
+        self, path: str, offset: int = 0, length: int = 1024
+    ) -> tuple[bytes, FileMetaInfo]:
+        try:
+            f = await aiofiles.open(os.path.join(self.path, path), "rb")
+            await f.seek(offset)
+            data = await f.read(length)
+            total_length = os.path.getsize(os.path.join(self.path, path))
+        except Exception as e:
+            data = str(e).encode("utf-8")
+            total_length = -1
+        return data, FileMetaInfo(
+            file_offset=offset,
+            file_chunk_length=len(data),
+            file_total_length=total_length,
+        )
 
 
 class Log:
@@ -203,6 +224,10 @@ class Template(BaseModel):
     volume: bool = False
     rules: list[UrlProxyRule] = []
 
+    @property
+    def path(self) -> str:
+        return os.path.join(Config.template_root_path, self.id + ".json")
+
     def save(self):
         if self.is_temporary:
             raise AttributeError()
@@ -212,6 +237,12 @@ class Template(BaseModel):
             "w",
             encoding="utf-8",
         ).write(self.model_dump_json(indent=4, ensure_ascii=False))
+
+    def delete(self):
+        try:
+            os.remove(self.path)
+        except:
+            pass
 
 
 async def softlink_dir_platform(src_dir: str, dst_dir: str):
@@ -286,6 +317,9 @@ class Instance:
     template: Template
     log: Log
 
+    def tree(self) -> dict:
+        return folder_to_dict(self.path)
+
     def __init__(self, template: Template, id: str = None):
         pattern = r"^[A-Za-z0-9_-]+$"
         if id is None:
@@ -313,6 +347,19 @@ class Instance:
     @property
     def path(self) -> str:
         return os.path.join(Config.instance_root_path, self.id)
+
+    async def cat(
+        self, path: str, offset: int = 0, length: int = 1024
+    ) -> tuple[bytes, FileMetaInfo]:
+        f = await aiofiles.open(os.path.join(self.path, path), "rb")
+        await f.seek(offset)
+        data = await f.read(length)
+        total_length = os.path.getsize(os.path.join(self.path, path))
+        return data, FileMetaInfo(
+            file_offset=offset,
+            file_chunk_length=len(data),
+            file_total_length=total_length,
+        )
 
     async def get_ready(self):
         if self.template.volume:

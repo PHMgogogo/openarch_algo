@@ -1,4 +1,11 @@
-from entity import Template, Instance, InstanceStatus, Algorithm, ProcessConnection
+from entity import (
+    Template,
+    Instance,
+    InstanceStatus,
+    Algorithm,
+    ProcessConnection,
+    FileMetaInfo,
+)
 import asyncio
 import os
 from config import Config
@@ -8,12 +15,52 @@ from algorithms.openarch_gateway.entity import UrlProxyRule
 import uuid
 import psutil
 from client import service
+import typing
+import base64
+import traceback
 
 
 def unsafe_peek(stream_reader: asyncio.StreamReader) -> int:
     if stream_reader and stream_reader._buffer:
         return len(stream_reader._buffer)
     return -1
+
+
+class ServiceHelper:
+    rules_tobe_add: asyncio.Queue[tuple[str, UrlProxyRule, BaseException, int]]
+    interval: float = 1
+    counter: float = 0
+    task: asyncio.Task
+
+    def __init__(self, interval: float = 1):
+        self.rules_tobe_add = asyncio.Queue[
+            tuple[str, UrlProxyRule, BaseException, int]
+        ]()
+        self.interval = interval
+        self.task = None
+
+    def add(self, instance_id: str, upr: UrlProxyRule):
+        self.rules_tobe_add.put_nowait((instance_id, upr, None, 0))
+
+    async def _watch(self):
+        l = self.rules_tobe_add.qsize()
+        for _ in range(l):
+            iid, upr, e, retry = await self.rules_tobe_add.get()
+            try:
+                await asyncio.to_thread(service.add, **upr.model_dump())
+            except BaseException as e:
+                self.rules_tobe_add.put_nowait((iid, upr, e, retry + 1))
+                # traceback.print_exc()
+                print(e)
+
+    async def watch(self, interval: float = 0.04):
+        self.counter += interval
+        if self.counter > self.interval:
+            self.counter = 0
+            if self.task is not None and not self.task.done():
+                return
+            else:
+                self.task = asyncio.create_task(self._watch())
 
 
 class AsyncIOWrapper:
@@ -47,44 +94,51 @@ class ProcessManager:
     instances: dict[str, Instance] = None
     processes: dict[str, dict[str, asyncio.subprocess.Process]] = None
     iowrappers: dict[str, dict[str, dict[str, AsyncIOWrapper]]] = None  # iid,"0",uid
+    lateload_instance_names: set[str] = None
+    service_helper: ServiceHelper
 
     def __init__(self):
         self.processes = dict[str, dict[str, asyncio.subprocess.Process]]()
         self.instances = dict[str, Instance]()
         self.iowrappers = dict[str, dict]()
+        self.lateload_instance_names = set[str]()
+        self.service_helper = ServiceHelper()
         self.load_instances_from_path()
+
+    def load_instance_from_path(self, instance_name: str) -> None:
+        if instance_name not in self.instances:
+            instance_info_path = os.path.join(
+                Config.instance_root_path,
+                instance_name,
+                Config.instance_info_path,
+            )
+            if not os.path.exists(instance_info_path):
+                return
+            else:
+                instance_template = Template.model_validate_json(
+                    open(
+                        os.path.join(
+                            Config.instance_root_path,
+                            instance_name,
+                            Config.instance_info_path,
+                        ),
+                        encoding="utf-8",
+                    ).read()
+                )
+                self.create_instance(instance_template, instance_name)
 
     def load_instances_from_path(self) -> None:
         os.makedirs(Config.instance_root_path, exist_ok=True)
         instances = os.listdir(Config.instance_root_path)
         for instance_name in instances:
-            if instance_name not in self.instances:
-                instance_info_path = os.path.join(
-                    Config.instance_root_path,
-                    instance_name,
-                    Config.instance_info_path,
-                )
-                if not os.path.exists(instance_info_path):
-                    continue
-                else:
-                    instance_template = Template.model_validate_json(
-                        open(
-                            os.path.join(
-                                Config.instance_root_path,
-                                instance_name,
-                                Config.instance_info_path,
-                            ),
-                            encoding="utf-8",
-                        ).read()
-                    )
-                    self.create_instance(instance_template, instance_name)
+            self.load_instance_from_path(instance_name)
 
     def create_instance(self, template: Template, id: str = None) -> str:
         if id is not None and id in self.instances:
             raise KeyError()
         instance = Instance(template, id)
         for rule in template.rules:
-            service.add(**rule.model_dump())
+            self.service_helper.add(instance.id, rule)
         self.instances[instance.id] = instance
         self.processes[instance.id] = dict[str, asyncio.subprocess.Process]()
         self.iowrappers[instance.id] = dict[str, dict[str, dict[str, AsyncIOWrapper]]]()
@@ -122,9 +176,52 @@ class ProcessManager:
         await instance.get_ready()
         return instance.id
 
-    async def cat(self, id: str, path: str, encoding="utf-8") -> str:
-        data = await self.get_algorithm(id).cat(path)
-        return data.decode(encoding=encoding, errors="ignore")
+    async def cat(
+        self,
+        type: typing.Literal["algorithm", "instance"],
+        id: str,
+        path: str,
+        offset: int = 0,
+        length: int = 1024,
+        encoding: typing.Literal["b64img"] | str = "utf-8",
+        fmt: str = None,
+    ) -> FileMetaInfo:
+        target = self.get_instance if type == "instance" else self.get_algorithm
+        if fmt is not None:
+            encoding = "b64img"
+        if encoding == "b64img":
+            length = -1
+        data, fmi = await target(id).cat(path, offset, length)
+        if encoding == "b64img":
+            fmi.file_type = "image"
+            ext = os.path.splitext(path)[1].lower()
+            if (fmt is not None) and (not fmt.startswith(".")):
+                ext = "." + fmt
+            mime_type = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".webp": "image/webp",
+                ".bmp": "image/bmp",
+                ".tiff": "image/tiff",
+                ".tif": "image/tiff",
+                ".ico": "image/ico",
+                ".dib": "image/bmp",
+                ".icns": "image/icns",
+                ".sgi": "image/sgi",
+                ".j2c": "image/jp2",
+                ".j2k": "image/jp2",
+                ".jp2": "image/jp2",
+                ".jpc": "image/jp2",
+                ".jpf": "image/jp2",
+                ".jpx": "image/jp2",
+            }
+            b64_data = base64.b64encode(data).decode("ascii")
+            fmi.chunk_content = f"data:{mime_type[ext]};base64,{b64_data}"
+        else:
+            fmi.chunk_content = data.decode(encoding=encoding, errors="ignore")
+        return fmi
 
     async def exec(self, id: str, entrys: list[str] = None) -> None:
         instance = self.instances[id]
@@ -197,8 +294,16 @@ class ProcessManager:
             try:
                 await asyncio.sleep(interval)
                 await self.watch()
+                await self.service_helper.watch(interval)
             except KeyboardInterrupt:
                 break
+
+    def delete_template(self, id_or_prefix: str) -> Template:
+        template = self.get_template(id_or_prefix)
+        if not isinstance(template, Template):
+            raise KeyError(template)
+        template.delete()
+        return template
 
     def create_template(
         self,
