@@ -11,7 +11,6 @@ import shutil
 import sys
 import re
 from algorithms.openarch_gateway.entity import UrlProxyRule
-from client import service
 import typing
 import socket
 
@@ -316,8 +315,6 @@ class Instance:
         return os.path.join(Config.instance_root_path, self.id)
 
     async def get_ready(self):
-        for rule in self.template.rules:
-            service.add(**rule.model_dump())
         if self.template.volume:
             await softlink_dir_platform(self.template.algorithm.path, self.path)
         else:

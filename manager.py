@@ -7,7 +7,7 @@ from datetime import datetime
 from algorithms.openarch_gateway.entity import UrlProxyRule
 import uuid
 import psutil
-
+from client import service
 
 def unsafe_peek(stream_reader: asyncio.StreamReader) -> int:
     if stream_reader and stream_reader._buffer:
@@ -82,6 +82,8 @@ class ProcessManager:
         if id is not None and id in self.instances:
             raise KeyError()
         instance = Instance(template, id)
+        for rule in template.rules:
+            service.add(**rule.model_dump())
         self.instances[instance.id] = instance
         self.processes[instance.id] = dict[str, asyncio.subprocess.Process]()
         self.iowrappers[instance.id] = dict[str, dict[str, dict[str, AsyncIOWrapper]]]()
@@ -109,9 +111,9 @@ class ProcessManager:
 
     async def run(self, template: Template, id: str = None) -> str:
         instance = self.instances[self.create_instance(template, id)]
-        await instance.get_ready()
         instance.save()
         await self.exec(instance.id)
+        await instance.get_ready()
         return instance.id
 
     async def cat(self, id: str, path: str, encoding="utf-8") -> str:
