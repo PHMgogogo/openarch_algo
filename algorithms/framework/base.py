@@ -95,7 +95,6 @@ class Model(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.layers(x)
 
-
 # </model-content>
 
 

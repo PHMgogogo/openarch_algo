@@ -67,7 +67,7 @@ class Container:
     async def save(self, path: str) -> None:
         if self.state != State.LOADED:
             raise RuntimeError(f"Cannot save from state {self.state}")
-        torch.save(self.model.state_dict(), path)
+        torch.save(path,self.model.state_dict())
 
     def set_criterion(self, criterion: nn.Module) -> None:
         self.criterion = criterion
@@ -217,7 +217,6 @@ class ProgressResponse(BaseModel):
     epoch_progress: dict | None
     batch_progress: dict | None
     result: list[base.LossModelResult] | None
-
 
 def create_app() -> FastAPI:
     app = fastapi.FastAPI()

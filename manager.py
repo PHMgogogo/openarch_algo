@@ -1,3 +1,4 @@
+from __future__ import annotations
 from entity import (
     Template,
     Instance,
@@ -10,8 +11,8 @@ import asyncio
 import os
 from config import Config
 import zipfile
-from datetime import datetime
-from algorithms.openarch_gateway.entity import UrlProxyRule
+from datetime import datetime, timedelta
+from algorithms.openarch_gateway.entity import UrlProxyRule, RuleType
 import uuid
 import psutil
 from client import service
@@ -28,30 +29,89 @@ def unsafe_peek(stream_reader: asyncio.StreamReader) -> int:
 
 class ServiceHelper:
     rules_tobe_add: asyncio.Queue[tuple[str, UrlProxyRule, BaseException, int]]
+    rules_tobe_remove: asyncio.Queue[tuple[str, UrlProxyRule, BaseException, int]]
     interval: float = 1
     counter: float = 0
     task: asyncio.Task
+    pmgr: ProcessManager = None
 
-    def __init__(self, interval: float = 1):
+    def __init__(self, pmgr: ProcessManager = None, interval: float = 1):
         self.rules_tobe_add = asyncio.Queue[
+            tuple[str, UrlProxyRule, BaseException, int]
+        ]()
+        self.rules_tobe_remove = asyncio.Queue[
             tuple[str, UrlProxyRule, BaseException, int]
         ]()
         self.interval = interval
         self.task = None
+        self.pmgr = pmgr
 
     def add(self, instance_id: str, upr: UrlProxyRule):
         self.rules_tobe_add.put_nowait((instance_id, upr, None, 0))
+
+    def remove(self, instance_id: str, upr: UrlProxyRule):
+        self.rules_tobe_remove.put_nowait((instance_id, upr, None, 0))
 
     async def _watch(self):
         l = self.rules_tobe_add.qsize()
         for _ in range(l):
             iid, upr, e, retry = await self.rules_tobe_add.get()
+            if self.pmgr is not None and iid not in self.pmgr.instances:
+                continue
             try:
                 await asyncio.to_thread(service.add, **upr.model_dump())
             except BaseException as e:
                 self.rules_tobe_add.put_nowait((iid, upr, e, retry + 1))
                 # traceback.print_exc()
                 print(e)
+        l = self.rules_tobe_remove.qsize()
+        for _ in range(l):
+            iid, upr, e, retry = await self.rules_tobe_remove.get()
+            try:
+                await asyncio.to_thread(service.delete, upr.name)
+            except BaseException as e:
+                print(e)
+        if self.pmgr is None:
+            return
+        for instance in self.pmgr.instances.values():
+            if instance.template.bind_listener:
+                try:
+                    pcs = await self.pmgr.get_process_connections(instance.id)
+                    if pcs is None:
+                        continue
+                    port = -1
+                    for pc in pcs:
+                        if port > 0:
+                            break
+                        for conn in pc.conns:
+                            if conn.status == "LISTEN":
+                                port = conn.laddr.port
+                                break
+                    upr = None
+                    need_save = False
+                    for item in instance.template.rules:
+                        if item.name == instance.id:
+                            upr = item
+                            break
+                    if upr is None:
+                        upr = UrlProxyRule(
+                            name=instance.id,
+                            order=-1,
+                            rule_type=RuleType.PREFIX,
+                            pattern=f"/{upr.name}",
+                            dest_index=[1],
+                            dest_format="/%s",
+                        )
+                        instance.template.rules.append(upr)
+                        need_save = True
+                    if upr.rewrite_host != f"127.0.0.1:{port}":
+                        need_save = True
+                        upr.rewrite_host = f"127.0.0.1:{port}"
+                    if need_save:
+                        instance.save()
+                    self.add(instance.id, upr)
+                except Exception as e:
+                    traceback.print_exc()
 
     async def watch(self, interval: float = 0.04):
         self.counter += interval
@@ -90,19 +150,54 @@ class AsyncIOWrapper:
         self.output_ready.set()
 
 
+class LazyTemporaryTemplateManager:
+    templates: dict[str, tuple[datetime, Template]]
+    expiration_time: timedelta = timedelta(minutes=60)
+
+    def __init__(self):
+        self.templates = dict[str, tuple[datetime, Template]]()
+
+    def add(self, template: Template, flush: bool = True):
+        self.templates[template.id] = (datetime.now(), template)
+        if flush:
+            self._flush()
+
+    def get(self, id_or_prefix: str):
+        if id_or_prefix in self.templates:
+            return self.templates[id_or_prefix][1]
+        else:
+            results = []
+            for key in self.templates:
+                if key.startswith(id_or_prefix):
+                    results.append(self.templates[key][1])
+            if len(results) == 1:
+                return results[0]
+            elif len(results) == 0:
+                return None
+            else:
+                return [item.id for item in results]
+
+    def _flush(self):
+        keys = list(self.templates.keys())
+        for key in keys:
+            create_date, template = self.templates[key]
+            if create_date + self.expiration_time < datetime.now():
+                del self.templates[key]
+
+
 class ProcessManager:
     instances: dict[str, Instance] = None
     processes: dict[str, dict[str, asyncio.subprocess.Process]] = None
     iowrappers: dict[str, dict[str, dict[str, AsyncIOWrapper]]] = None  # iid,"0",uid
-    lateload_instance_names: set[str] = None
     service_helper: ServiceHelper
+    temp_template_manager: LazyTemporaryTemplateManager
 
     def __init__(self):
         self.processes = dict[str, dict[str, asyncio.subprocess.Process]]()
         self.instances = dict[str, Instance]()
         self.iowrappers = dict[str, dict]()
-        self.lateload_instance_names = set[str]()
-        self.service_helper = ServiceHelper()
+        self.service_helper = ServiceHelper(self)
+        self.temp_template_manager = LazyTemporaryTemplateManager()
         self.load_instances_from_path()
 
     def load_instance_from_path(self, instance_name: str) -> None:
@@ -148,17 +243,17 @@ class ProcessManager:
     async def remove_instance(self, id_or_prefix: str, force: bool = False) -> None:
         instance = self.get_instance(id_or_prefix)
         await self.stop(instance.id, force)
-        for rule in instance.template.rules:
-            try:
-                service.delete(rule.name)
-            except:
-                pass
-        await instance.clear()
         del self.instances[instance.id]
         del self.processes[instance.id]
         del self.iowrappers[instance.id]
+        for rule in instance.template.rules:
+            try:
+                service.delete(rule.name)
+            except Exception as e:
+                traceback.print_exc()
+        await instance.clear()
 
-    async def stop(self, id_or_prefix: str, force: bool = False) -> str:
+    async def stop(self, id_or_prefix: str, force: bool = True) -> str:
         instance = self.get_instance(id_or_prefix)
         if "0" in self.processes[instance.id]:
             proc = self.processes[instance.id]["0"]
@@ -171,9 +266,9 @@ class ProcessManager:
 
     async def run(self, template: Template, id: str = None) -> str:
         instance = self.instances[self.create_instance(template, id)]
+        await instance.get_ready()
         instance.save()
         await self.exec(instance.id)
-        await instance.get_ready()
         return instance.id
 
     async def cat(
@@ -314,12 +409,13 @@ class ProcessManager:
         is_temporary: bool = True,
         volume: bool = False,
         restart_interval_seconds: float = 10,
+        bind_listener: bool = False,
         rules: list[UrlProxyRule] = [],
     ) -> Template:
         if id is not None:
             existing = self.get_template(id)
             if isinstance(existing, Template):
-                raise KeyError()
+                raise KeyError(id)
         template = Template(
             algorithm=algorithm,
             entry=entry,
@@ -327,12 +423,15 @@ class ProcessManager:
             is_temporary=is_temporary,
             volume=volume,
             restart_interval_seconds=restart_interval_seconds,
+            bind_listener=bind_listener,
             rules=rules,
         )
         if id is not None:
             template.id = id
         if not is_temporary:
             template.save()
+        else:
+            self.temp_template_manager.add(template)
         return template
 
     def get_template(self, id_or_prefix: str) -> list[str] | Template | None:
@@ -350,7 +449,7 @@ class ProcessManager:
                 ).read()
             )
         elif len(starts_with) < 1:
-            return None
+            return self.temp_template_manager.get(id_or_prefix)
         else:
             return starts_with
 

@@ -36,17 +36,6 @@ pm = ProcessManager()
 app.mount("/static", StaticFiles(directory=".", html=True), name="static")
 
 
-class CreateTemplateRequest(BaseModel):
-    algorithm_id: str
-    id: Optional[str] = None
-    entry: Optional[str] = "python main.py"
-    restart_always: bool = False
-    is_temporary: bool = False
-    volume: bool = False
-    restart_interval_seconds: Optional[float] = 10
-    rules: Optional[list[UrlProxyRule]] = None
-
-
 class CreateInstanceRequest(BaseModel):
     template_id: str
     id: Optional[str] = None
@@ -69,16 +58,6 @@ class InstanceResponse(BaseModel):
     id: str
     status: str
     template_id: str
-
-
-class TemplateResponse(BaseModel):
-    id: str
-    algorithm_id: str
-    entry: str
-    restart_always: bool
-    is_temporary: bool
-    volume: bool
-    restart_interval_seconds: float
 
 
 class AlgorithmResponse(BaseModel):
@@ -178,50 +157,26 @@ async def list_templates():
     return [templates.id]
 
 
-@app.get("/templates/{template_id}", response_model=TemplateResponse)
+@app.get("/templates/{template_id}", response_model=Template)
 async def get_template_detail(template_id: str):
     template = pm.get_template(template_id)
     if not isinstance(template, Template):
         if template is None:
             raise HTTPException(status_code=404, detail="Template not found")
         raise HTTPException(status_code=400, detail="Template prefix is ambiguous")
-    return TemplateResponse(
-        id=template.id,
-        algorithm_id=template.algorithm.id,
-        entry=template.entry,
-        restart_always=template.restart_always,
-        is_temporary=template.is_temporary,
-        volume=template.volume,
-        restart_interval_seconds=template.restart_interval_seconds,
-    )
+    return template
 
 
-@app.post("/templates", response_model=TemplateResponse)
-async def create_template(request: CreateTemplateRequest):
-    algorithm = pm.get_algorithm(request.algorithm_id)
+@app.post("/templates", response_model=Template)
+async def create_template(request: Template):
+    algorithm = pm.get_algorithm(request.algorithm.id)
     if not isinstance(algorithm, Algorithm):
         raise HTTPException(status_code=404, detail="Algorithm not found")
     try:
-        template = pm.create_template(
-            algorithm=algorithm,
-            id=request.id,
-            entry=request.entry,
-            restart_always=request.restart_always,
-            is_temporary=request.is_temporary,
-            volume=request.volume,
-            restart_interval_seconds=request.restart_interval_seconds,
-        )
+        template = pm.create_template(**request.model_dump())
     except KeyError:
         raise HTTPException(status_code=409, detail="Template ID already exists")
-    return TemplateResponse(
-        id=template.id,
-        algorithm_id=template.algorithm.id,
-        entry=template.entry,
-        restart_always=template.restart_always,
-        is_temporary=template.is_temporary,
-        volume=template.volume,
-        restart_interval_seconds=template.restart_interval_seconds,
-    )
+    return template
 
 
 @app.post("/instances", response_model=dict)
@@ -275,7 +230,7 @@ async def stop_instance(instance_id: str, force: bool = False):
 
 
 @app.delete("/instances/{instance_id}")
-async def delete_instance(instance_id: str, force: bool = False):
+async def delete_instance(instance_id: str, force: bool = True):
     await pm.remove_instance(instance_id, force)
     return {"message": "Instance deleted"}
 

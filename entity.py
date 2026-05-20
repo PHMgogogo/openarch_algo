@@ -222,10 +222,13 @@ class Template(BaseModel):
     is_temporary: bool = False
     restart_interval_seconds: float = 10
     volume: bool = False
+    bind_listener: bool = False
     rules: list[UrlProxyRule] = []
 
     @property
     def path(self) -> str:
+        if self.is_temporary:
+            return ""
         return os.path.join(Config.template_root_path, self.id + ".json")
 
     def save(self):
@@ -239,6 +242,8 @@ class Template(BaseModel):
         ).write(self.model_dump_json(indent=4, ensure_ascii=False))
 
     def delete(self):
+        if self.is_temporary:
+            return
         try:
             os.remove(self.path)
         except:

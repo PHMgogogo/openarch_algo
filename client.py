@@ -6,9 +6,12 @@ import json
 import sys
 from typing import Literal, get_type_hints, Any
 import os
+import time
+import uuid
 
 PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8001/pmgr")
-RULE_MANAGER_URL = os.getenv("RULE_MANAGER_URL", "http://127.0.0.1:8001/smgr")
+SERVICE_MANAGER_URL = os.getenv("SERVICE_MANAGER_URL", "http://127.0.0.1:8001/smgr")
+SERVICE_ROOT_URL = os.getenv("SERVICE_ROOT_URL", "http://127.0.0.1:8001")
 
 
 def auto(response: requests.Response):
@@ -25,6 +28,7 @@ class process:
     class algorithms:
         """Algorithm management operations"""
 
+        @staticmethod
         def get() -> dict:
             """Get list of all algorithms
 
@@ -33,6 +37,7 @@ class process:
             """
             return auto(requests.get(f"{PROCESS_MANAGER_URL}/algorithms"))
 
+        @staticmethod
         def info(id_or_prefix: str) -> dict:
             """Get information about a specific algorithm
 
@@ -43,6 +48,7 @@ class process:
                 requests.get(f"{PROCESS_MANAGER_URL}/algorithms/{id_or_prefix}")
             )
 
+        @staticmethod
         def upload(
             f: io.BufferedReader,
             version: str = "",
@@ -69,6 +75,7 @@ class process:
                 )
             )
 
+        @staticmethod
         def cat(
             id_or_prefix: str,
             path: str = None,
@@ -105,10 +112,12 @@ class process:
     class templates:
         """Template management operations"""
 
+        @staticmethod
         def get() -> dict:
             """Get list of all templates"""
             return auto(requests.get(f"{PROCESS_MANAGER_URL}/templates"))
 
+        @staticmethod
         def info(id_or_prefix: str) -> dict:
             """Get information about a specific template
 
@@ -117,6 +126,7 @@ class process:
             """
             return auto(requests.get(f"{PROCESS_MANAGER_URL}/templates/{id_or_prefix}"))
 
+        @staticmethod
         def create(
             algorithm_id_or_prefix: str,
             id: str = None,
@@ -125,6 +135,7 @@ class process:
             is_temporary: bool = False,
             volume: bool = False,
             restart_interval_seconds: float = 10,
+            bind_listener: bool = False,
             rules: list[dict[str, float | str | int | bool]] = [],
         ) -> dict:
             """Create a new template from an algorithm
@@ -137,24 +148,27 @@ class process:
                 is_temporary: Delete instance after it stops
                 volume: Use persistent volume for this template
                 restart_interval_seconds: Wait seconds before restart
+                bind_listener: Always bind proxy to first LISTEN port
                 rules: List of environment rules
             """
             return auto(
                 requests.post(
                     f"{PROCESS_MANAGER_URL}/templates",
                     json={
-                        "algorithm_id": algorithm_id_or_prefix,
+                        "algorithm": {"id": algorithm_id_or_prefix},
                         "id": id,
                         "entry": entry,
                         "restart_always": restart_always,
                         "is_temporary": is_temporary,
                         "volume": volume,
                         "restart_interval_seconds": restart_interval_seconds,
+                        "bind_listener": bind_listener,
                         "rules": rules,
                     },
                 )
             )
 
+        @staticmethod
         def delete(id_or_prefix: str) -> dict:
             return auto(
                 requests.delete(f"{PROCESS_MANAGER_URL}/templates/{id_or_prefix}")
@@ -163,10 +177,12 @@ class process:
     class instances:
         """Running instance management operations"""
 
+        @staticmethod
         def get() -> dict:
             """Get list of all running instances"""
             return auto(requests.get(f"{PROCESS_MANAGER_URL}/instances"))
 
+        @staticmethod
         def info(id_or_prefix: str) -> dict:
             """Get information about a specific instance
 
@@ -175,6 +191,7 @@ class process:
             """
             return auto(requests.get(f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}"))
 
+        @staticmethod
         def create(
             template_id_or_prefix: str, id: str = None, entry: str = None
         ) -> dict:
@@ -196,6 +213,7 @@ class process:
                 )
             )
 
+        @staticmethod
         def cat(
             id_or_prefix: str,
             path: str = None,
@@ -229,6 +247,7 @@ class process:
                 )
             )
 
+        @staticmethod
         def stop(id_or_prefix: str) -> dict:
             """Stop a running instance
 
@@ -242,6 +261,7 @@ class process:
                 )
             )
 
+        @staticmethod
         def delete(id_or_prefix: str) -> dict:
             """Delete a stopped instance
 
@@ -252,6 +272,7 @@ class process:
                 requests.delete(f"{PROCESS_MANAGER_URL}/instances/{id_or_prefix}")
             )
 
+        @staticmethod
         def connections(id_or_prefix: str) -> dict:
             """Get connection information for a specific instance
 
@@ -267,6 +288,7 @@ class process:
         class logs:
             """Log access operations"""
 
+            @staticmethod
             def out(id_or_prefix: str) -> str:
                 """Get stdout from instance
 
@@ -279,6 +301,7 @@ class process:
                     )
                 )
 
+            @staticmethod
             def err(id_or_prefix: str) -> str:
                 """Get stderr from instance
 
@@ -295,18 +318,21 @@ class process:
 class service:
     """Rule/service manager operations for routing rules"""
 
+    @staticmethod
     def get() -> dict:
         """Get list of all routing rules"""
-        return auto(requests.get(f"{RULE_MANAGER_URL}/rules"))
+        return auto(requests.get(f"{SERVICE_MANAGER_URL}/rules"))
 
+    @staticmethod
     def delete(name: str):
         """Delete a routing rule by name
 
         Args:
             name: Name of the rule to delete
         """
-        return auto(requests.delete(f"{RULE_MANAGER_URL}/rules/{name}"))
+        return auto(requests.delete(f"{SERVICE_MANAGER_URL}/rules/{name}"))
 
+    @staticmethod
     def update(
         name: str,
         order: int = -1,
@@ -335,7 +361,7 @@ class service:
         """
         return auto(
             requests.put(
-                f"{RULE_MANAGER_URL}/rules",
+                f"{SERVICE_MANAGER_URL}/rules",
                 json={
                     "name": name,
                     "order": order,
@@ -351,6 +377,7 @@ class service:
             )
         )
 
+    @staticmethod
     def add(
         name: str,
         order: int = -1,
@@ -381,7 +408,7 @@ class service:
         """
         return auto(
             requests.put(
-                f"{RULE_MANAGER_URL}/rules",
+                f"{SERVICE_MANAGER_URL}/rules",
                 json={
                     "name": name,
                     "order": order,
@@ -399,6 +426,7 @@ class service:
             )
         )
 
+    @staticmethod
     def match(path: str):
         """Match a path against existing rules
 
@@ -407,11 +435,12 @@ class service:
         """
         return auto(
             requests.post(
-                f"{RULE_MANAGER_URL}/rules/match",
+                f"{SERVICE_MANAGER_URL}/rules/match",
                 json={"path": path},
             )
         )
 
+    @staticmethod
     def preview(name: str, path: str):
         """Preview how a rule matches a given path
 
@@ -421,11 +450,12 @@ class service:
         """
         return auto(
             requests.post(
-                f"{RULE_MANAGER_URL}/rules/{name}/preview",
+                f"{SERVICE_MANAGER_URL}/rules/{name}/preview",
                 json={"path": path},
             )
         )
 
+    @staticmethod
     def test(
         path: str,
         host: str,
@@ -458,7 +488,7 @@ class service:
         """
         return auto(
             requests.post(
-                f"{RULE_MANAGER_URL}/rules/test",
+                f"{SERVICE_MANAGER_URL}/rules/test",
                 json={
                     "path": path,
                     "host": host,
@@ -477,6 +507,57 @@ class service:
                 },
             )
         )
+
+
+class highlevel:
+    @staticmethod
+    def create() -> dict:
+        uid = str(uuid.uuid4())
+        template = process.templates.info("framework")
+        template["is_temporary"] = True
+        template["id"] = uid
+        template.setdefault("rules", []).append(
+            {
+                "name": uid,
+                "order": -1,
+                "rule_type": "PREFIX",
+                "pattern": f"/{uid}",
+                "dest_index": [1],
+                "dest_format": "/%s",
+                "rewrite_host": "127.0.0.1:0",
+                "default_entrance": f"/{uid}/?prefix={uid}",
+            }
+        )
+        entry = template["entry"] + f" --root-path /{uid}"
+        r = process.templates.create(
+            template["algorithm"]["id"],
+            template["id"],
+            entry,
+            template["restart_always"],
+            template["is_temporary"],
+            template["volume"],
+            template["restart_interval_seconds"],
+            template["bind_listener"],
+            template["rules"],
+        )
+        # print(r)
+        process.instances.create(uid, uid, entry)
+        result = {
+            "instance_id": uid,
+            "entrance": f"{SERVICE_ROOT_URL}/{uid}/openapi.json",
+            "base_url": f"{SERVICE_ROOT_URL}/{uid}",
+            "doc_url": f"{SERVICE_ROOT_URL}/{uid}/docs",
+            "index_url": f"{SERVICE_ROOT_URL}/{uid}/?prefix={uid}",
+            "help": (
+                "Algorithm service is now online. "
+                "POST {base_url}/load to load a model, "
+                "GET {base_url}/openapi.json to learn about other interfaces."
+            ),
+        }
+        return result
+
+    def delete(instance_id: str) -> dict:
+        return process.instances.delete(instance_id)
 
 
 def _parse_docstring(docstring: str) -> tuple[str, dict[str, str]]:

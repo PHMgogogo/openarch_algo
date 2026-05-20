@@ -1,0 +1,15 @@
+{
+    "algorithm": {
+        "id": "framework",
+        "version": "",
+        "description": ""
+    },
+    "entry": "uvicorn server:create_app --factory --port 0",
+    "restart_always": true,
+    "id": "framework",
+    "is_temporary": false,
+    "restart_interval_seconds": 10.0,
+    "bind_listener": true,
+    "volume": false,
+    "rules": []
+}

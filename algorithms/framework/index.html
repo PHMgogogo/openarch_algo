@@ -760,6 +760,17 @@
             document.getElementById('errorAlert').classList.remove('show');
         }
 
+        function getApiPrefix() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const prefix = urlParams.get('prefix');
+            return prefix ? `/${prefix}` : '';
+        }
+
+        function apiUrl(path) {
+            const prefix = getApiPrefix();
+            return prefix + path;
+        }
+
         async function handleApiResponse(response, successMessage) {
             if (response.ok) {
                 addLog('success', successMessage);
@@ -775,7 +786,7 @@
             const path = document.getElementById('modelPath').value || null;
             try {
                 addLog('info', `正在加载模型...`);
-                const response = await fetch('/load', {
+                const response = await fetch(apiUrl('/load'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ path })
@@ -795,7 +806,7 @@
             }
             try {
                 addLog('info', `正在保存模型到 ${path}...`);
-                const response = await fetch('/save', {
+                const response = await fetch(apiUrl('/save'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ path })
@@ -809,7 +820,7 @@
         async function unloadModel() {
             try {
                 addLog('info', '正在卸载模型...');
-                const response = await fetch('/unload', { method: 'POST' });
+                const response = await fetch(apiUrl('/unload'), { method: 'POST' });
                 await handleApiResponse(response, '模型卸载成功');
                 refreshState();
             } catch (e) {
@@ -847,7 +858,7 @@
 
             try {
                 addLog('info', '开始训练...');
-                const response = await fetch('/train', {
+                const response = await fetch(apiUrl('/train'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(request)
@@ -887,7 +898,7 @@
 
             try {
                 addLog('info', '开始推理...');
-                const response = await fetch('/infer', {
+                const response = await fetch(apiUrl('/infer'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(request)
@@ -901,7 +912,7 @@
 
         async function stopTask() {
             try {
-                await fetch('/stop', { method: 'GET' });
+                await fetch(apiUrl('/stop'), { method: 'GET' });
                 addLog('info', '停止信号已发送');
             } catch (e) {
                 showError('发送停止信号失败: ' + e.message, e.name);
@@ -910,7 +921,7 @@
 
         async function refreshState() {
             try {
-                const response = await fetch('/state');
+                const response = await fetch(apiUrl('/state'));
                 const data = await response.json();
                 
                 const indicator = document.getElementById('statusIndicator');

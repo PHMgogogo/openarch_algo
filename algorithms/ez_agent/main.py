@@ -57,7 +57,6 @@ class ImageContent(TypedDict):
     image_url: str = ""
     type: Literal["input_image"] = "input_image"
 
-
 def text_content(item) -> TextContent:
     return TextContent(text=item, type="input_text")
 
