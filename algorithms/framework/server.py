@@ -67,7 +67,7 @@ class Container:
     async def save(self, path: str) -> None:
         if self.state != State.LOADED:
             raise RuntimeError(f"Cannot save from state {self.state}")
-        torch.save(path,self.model.state_dict())
+        torch.save(path, self.model.state_dict())
 
     def set_criterion(self, criterion: nn.Module) -> None:
         self.criterion = criterion
@@ -185,19 +185,22 @@ class JsonCSV(BaseModel):
 class DatasetRequest(BaseModel):
     content_type: typing.Literal["path_csv", "json_csv", "text_csv"]
     content: str | JsonCSV | typing.Any
-    label_cols: list[str]
+    data_cols: list[str]
+    label_cols: list[str] = None
 
     def get(self) -> base.TableByRowDataset:
         if self.content_type == "path_csv":
-            return base.TableByRowDataset(self.content, self.label_cols)
+            return base.TableByRowDataset(self.content, self.data_cols, self.label_cols)
         elif self.content_type == "json_csv":
-            return base.TableByRowDataset(self.content.write_to_tmp(), self.label_cols)
+            return base.TableByRowDataset(
+                self.content.write_to_tmp(), self.data_cols, self.label_cols
+            )
         elif self.content_type == "text_csv":
             f = tempfile.NamedTemporaryFile(
                 mode="w", suffix=".csv", newline="", encoding="utf-8", delete=False
             )
             f.write(self.content)
-            return base.TableByRowDataset(f.name, self.label_cols)
+            return base.TableByRowDataset(f.name, self.data_cols, self.label_cols)
 
 
 class TrainRequest(BaseModel):
@@ -208,7 +211,7 @@ class TrainRequest(BaseModel):
 
 class InferRequest(BaseModel):
     dataset: DatasetRequest
-    args: base.EvalArgs
+    args: base.EvalArgs = base.EvalArgs()
     detach: bool = False
 
 
@@ -216,7 +219,8 @@ class ProgressResponse(BaseModel):
     state: str
     epoch_progress: dict | None
     batch_progress: dict | None
-    result: list[base.LossModelResult] | None
+    result: list[base.ModelResult] | None
+
 
 def create_app() -> FastAPI:
     app = fastapi.FastAPI()
@@ -225,8 +229,7 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def exception_handler(request: fastapi.Request, exc: Exception):
         return fastapi.responses.JSONResponse(
-            status_code=500,
-            content={"detail": str(exc), "type": type(exc).__name__}
+            status_code=500, content={"detail": str(exc), "type": type(exc).__name__}
         )
 
     @app.get("/")

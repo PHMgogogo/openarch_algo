@@ -556,6 +556,29 @@ class highlevel:
         }
         return result
 
+    def load(instance_id: str, path: str = None) -> dict:
+        if path is not None:
+            path = os.path.abspath(path)
+        iid = process.instances.info(instance_id)["id"]
+        requests.post(f"{SERVICE_ROOT_URL}/{iid}/load", json={"path": path})
+        return auto(requests.get(f"{SERVICE_ROOT_URL}/{iid}/state"))
+
+    def infer(instance_id: str, csv_path: str, data_cols: list[str]) -> dict:
+        csv_path = os.path.abspath(csv_path)
+        iid = process.instances.info(instance_id)["id"]
+        requests.post(
+            f"{SERVICE_ROOT_URL}/{iid}/infer",
+            json={
+                "dataset": {
+                    "content_type": "path_csv",
+                    "content": csv_path,
+                    "data_cols": data_cols,
+                }
+            },
+        )
+        requests.get(f"{SERVICE_ROOT_URL}/{iid}/wait")
+        return auto(requests.get(f"{SERVICE_ROOT_URL}/{iid}/state"))
+
     def delete(instance_id: str) -> dict:
         return process.instances.delete(instance_id)
 

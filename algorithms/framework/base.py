@@ -5,9 +5,8 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import typing
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 import inspect
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import os
 from contextlib import nullcontext
 
@@ -22,12 +21,13 @@ class TableByRowDataset(Dataset):
     def __init__(
         self,
         csv_path: str,
+        data_cols: list[str],
         label_cols: list[str] | None = None,
         use_cache: bool = True,
     ) -> None:
         self.df = pd.read_csv(csv_path)
         self.label_cols = label_cols
-        self.data_cols = [c for c in self.df.columns if c not in set(label_cols)]
+        self.data_cols = data_cols
         self.use_cache = use_cache
         self._cache = {}  # idx -> (data, label)
 
@@ -49,13 +49,13 @@ class TableByRowDataset(Dataset):
             )
         return data, label
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, int]:
         if self.use_cache and idx in self._cache:
             return self._cache[idx]
         item = self._load_row(idx)
         if self.use_cache:
             self._cache[idx] = item
-        return item
+        return *item, idx
 
     def warmup(self, device: str = "cpu") -> None:
         for idx in range(len(self)):
@@ -68,16 +68,12 @@ class TableByRowDataset(Dataset):
 
 
 class ModelResult(BaseModel):
+    loss: float
+    outputs: list[list[float]]
+    ids: list[int]
+
     def code(self) -> str:
         return inspect.getsource(self.__class__)
-
-
-# <result-content>
-class LossModelResult(ModelResult):
-    loss: float
-
-
-# <result-content>
 
 
 # <model-content>
@@ -94,6 +90,7 @@ class Model(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.layers(x)
+
 
 # </model-content>
 
@@ -145,15 +142,18 @@ def train_or_eval(
         model.eval()
 
     model = model.to(device)
-    data_loader = torch.utils.data.DataLoader(data, batch_size, shuffle=True)
+    data_loader = DataLoader(data, batch_size, shuffle=True)
     null_f = None if progress else open(os.devnull, "w")
     epoch_progress = tqdm(range(epoch), file=null_f)
     with torch.no_grad() if not train else nullcontext():
         for ep in epoch_progress:
             epoch_callback(**epoch_progress.format_dict)
             total_loss = 0
+            outputs_list = list[list[float]]()
+            ids_list = list[int]()
             batch_progress = tqdm(data_loader, file=null_f)
-            for batch_data, batch_labels in batch_progress:
+            for batch_data, batch_labels, batch_ids in batch_progress:
+                ids_list.extend(batch_ids)
                 if interrupt_signal():
                     return model_result
                 batch_callback(**batch_progress.format_dict)
@@ -161,14 +161,15 @@ def train_or_eval(
                 batch_labels = batch_labels.to(device)
                 if train:
                     optimizer.zero_grad()
-                outputs = model(batch_data)
+                outputs: torch.Tensor = model(batch_data)
+                outputs_list.extend(outputs.tolist())
                 loss: torch.Tensor = criterion(outputs, batch_labels)
                 if train:
                     loss.backward()
                     optimizer.step()
                 total_loss += loss.item()
             avg_loss = total_loss / len(data)
-            r = LossModelResult(loss=avg_loss)
+            r = ModelResult(loss=avg_loss, outputs=outputs_list, ids=ids_list)
             model_result.append(r)
             result_callback(result=r)
             batch_callback(**batch_progress.format_dict)
@@ -178,66 +179,3 @@ def train_or_eval(
 
 
 # </train-or-eval-content>
-
-
-def split_dataset(
-    dataset: Dataset,
-    ratios: list[float],
-    generator: typing.Optional[torch.Generator] = None,
-) -> list[Dataset]:
-    total_size = len(dataset)
-    ratios_sum = sum(ratios)
-    ratios = [r / ratios_sum for r in ratios]
-    sizes = [int(total_size * r) for r in ratios]
-    sizes[-1] = total_size - sum(sizes[:-1])
-
-    return torch.utils.data.random_split(dataset, sizes, generator=generator)
-
-
-def split_dataloader(
-    dataset: Dataset,
-    ratios: list[float],
-    batch_size: int = 1,
-    shuffle: bool = True,
-    generator: typing.Optional[torch.Generator] = None,
-) -> list[DataLoader]:
-    subsets = split_dataset(dataset, ratios, generator)
-    dataloaders = [
-        DataLoader(subset, batch_size=batch_size, shuffle=shuffle) for subset in subsets
-    ]
-    return dataloaders
-
-
-if __name__ == "__main__":
-    # <main-content>
-    model = Model()
-    dataset = TableByRowDataset("../example/sqrt.csv", ["y"]).warmup("cuda:0")
-    generator = torch.Generator()
-    train_dataset, eval_dataset = split_dataset(dataset, [0.8, 0.2], generator)
-    train_result = train_or_eval(
-        model, train_dataset, "train", epoch=30, batch_size=10, device="cuda:0"
-    )
-    print(train_result[-1].model_dump_json())
-    model.eval()
-    x_list = []
-    pred_list = []
-    label_list = []
-    with torch.no_grad():
-        for i in range(len(eval_dataset)):
-            data, label = eval_dataset[i]
-            data = data.to("cuda:0")
-            prediction = model(data)
-            x_list.append(data[0].item())
-            pred_list.append(prediction.item())
-            label_list.append(label.item())
-
-    plt.figure(figsize=(10, 6))
-    plt.scatter(x_list, label_list, label="Label", color="blue", alpha=0.6, s=10)
-    plt.scatter(x_list, pred_list, label="Prediction", color="red", alpha=0.6, s=10)
-    plt.xlabel("X")
-    plt.ylabel("Y")
-    plt.title("Prediction vs Label")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.savefig("output.png")
-    # </main-content>
