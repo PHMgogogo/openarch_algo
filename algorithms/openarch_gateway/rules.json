@@ -49,7 +49,7 @@
     },
     {
         "name": "ez_agent",
-        "order": 1,
+        "order": -1,
         "rule_type": "PREFIX",
         "pattern": "/ezagent",
         "dest_index": [

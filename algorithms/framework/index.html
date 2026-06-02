@@ -539,6 +539,13 @@
                 </div>
 
                 <div class="form-group">
+                    <label>数据列 (作为模型输入的特征列)</label>
+                    <div class="checkbox-group" id="trainDataCols">
+                        <span style="color: #999;">请先上传CSV文件</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
                     <label>标签列 (选择需要预测的列)</label>
                     <div class="checkbox-group" id="trainLabelCols">
                         <span style="color: #999;">请先上传CSV文件</span>
@@ -589,7 +596,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label>标签列 (选择需要预测的列)</label>
+                    <label>数据列 (作为模型输入的特征列)</label>
+                    <div class="checkbox-group" id="inferDataCols">
+                        <span style="color: #999;">请先上传CSV文件</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>标签列 (可选，用于评估)</label>
                     <div class="checkbox-group" id="inferLabelCols">
                         <span style="color: #999;">请先上传CSV文件</span>
                     </div>
@@ -634,6 +648,7 @@
         let inferCsvContent = '';
         let inferHeaders = [];
         let statePolling = null;
+        const STATE_RESULT_LIMIT = 100;
 
         window.onload = function() {
             refreshState();
@@ -703,6 +718,7 @@
             }
 
             const previewContainer = document.getElementById(prefix + 'CsvPreview');
+            const dataColsContainer = document.getElementById(prefix + 'DataCols');
             const labelColsContainer = document.getElementById(prefix + 'LabelCols');
             
             let tableHtml = '<table><thead><tr>';
@@ -723,23 +739,31 @@
             previewContainer.innerHTML = tableHtml;
             previewContainer.style.display = 'block';
 
-            let checkboxHtml = '';
+            let dataCheckboxHtml = '';
+            let labelCheckboxHtml = '';
             headers.forEach(h => {
-                checkboxHtml += `
+                dataCheckboxHtml += `
                     <div class="checkbox-item">
-                        <input type="checkbox" id="${prefix}_col_${h}" value="${h}">
-                        <label for="${prefix}_col_${h}">${h}</label>
+                        <input type="checkbox" id="${prefix}_data_${h}" value="${h}">
+                        <label for="${prefix}_data_${h}">${h}</label>
+                    </div>
+                `;
+                labelCheckboxHtml += `
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="${prefix}_label_${h}" value="${h}">
+                        <label for="${prefix}_label_${h}">${h}</label>
                     </div>
                 `;
             });
-            labelColsContainer.innerHTML = checkboxHtml;
+            dataColsContainer.innerHTML = dataCheckboxHtml;
+            labelColsContainer.innerHTML = labelCheckboxHtml;
         }
 
-        function getSelectedLabelCols(prefix) {
+        function getSelectedCols(prefix, kind) {
             const headers = prefix === 'train' ? trainHeaders : inferHeaders;
             const selected = [];
             headers.forEach(h => {
-                const checkbox = document.getElementById(`${prefix}_col_${h}`);
+                const checkbox = document.getElementById(`${prefix}_${kind}_${h}`);
                 if (checkbox && checkbox.checked) {
                     selected.push(h);
                 }
@@ -829,7 +853,12 @@
         }
 
         async function startTrain() {
-            const labelCols = getSelectedLabelCols('train');
+            const dataCols = getSelectedCols('train', 'data');
+            const labelCols = getSelectedCols('train', 'label');
+            if (dataCols.length === 0) {
+                showError('请至少选择一个数据列', 'ValidationError');
+                return;
+            }
             if (labelCols.length === 0) {
                 showError('请至少选择一个标签列', 'ValidationError');
                 return;
@@ -843,6 +872,7 @@
                 dataset: {
                     content_type: 'text_csv',
                     content: trainCsvContent,
+                    data_cols: dataCols,
                     label_cols: labelCols
                 },
                 args: {
@@ -871,9 +901,10 @@
         }
 
         async function startInfer() {
-            const labelCols = getSelectedLabelCols('infer');
-            if (labelCols.length === 0) {
-                showError('请至少选择一个标签列', 'ValidationError');
+            const dataCols = getSelectedCols('infer', 'data');
+            const labelCols = getSelectedCols('infer', 'label');
+            if (dataCols.length === 0) {
+                showError('请至少选择一个数据列', 'ValidationError');
                 return;
             }
             if (!inferCsvContent) {
@@ -885,7 +916,8 @@
                 dataset: {
                     content_type: 'text_csv',
                     content: inferCsvContent,
-                    label_cols: labelCols
+                    data_cols: dataCols,
+                    label_cols: labelCols.length > 0 ? labelCols : null
                 },
                 args: {
                     batch_size: parseInt(document.getElementById('inferBatchSize').value),
@@ -921,7 +953,7 @@
 
         async function refreshState() {
             try {
-                const response = await fetch(apiUrl('/state'));
+                const response = await fetch(apiUrl(`/state/${STATE_RESULT_LIMIT}`));
                 const data = await response.json();
                 
                 const indicator = document.getElementById('statusIndicator');

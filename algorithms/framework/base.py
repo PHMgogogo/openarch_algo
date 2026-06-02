@@ -51,7 +51,7 @@ class TableByRowDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, int]:
         if self.use_cache and idx in self._cache:
-            return self._cache[idx]
+            return *self._cache[idx], idx
         item = self._load_row(idx)
         if self.use_cache:
             self._cache[idx] = item
@@ -100,16 +100,19 @@ class TrainOrEvalArgs(BaseModel):
     device: typing.Literal["cpu", "cuda"] | str = "cpu"
     progress: bool = False
     mode: typing.Literal["train", "eval"]
+    shuffle: bool = True
 
 
 class TrainArgs(TrainOrEvalArgs):
     epoch: int = 1
     learning_rate: float = 1e-3
     mode: typing.Literal["train"] = "train"
+    shuffle: bool = True
 
 
 class EvalArgs(TrainOrEvalArgs):
     mode: typing.Literal["eval"] = "eval"
+    shuffle: bool = False
 
 
 # <train-or-eval-content>
@@ -121,6 +124,7 @@ def train_or_eval(
     batch_size: int = 1,
     learning_rate: float = 1e-3,
     device: str = "cpu",
+    shuffle: bool = True,
     criterion: nn.Module = None,
     optimizer: optim.Optimizer = None,
     progress: bool = True,
@@ -142,7 +146,7 @@ def train_or_eval(
         model.eval()
 
     model = model.to(device)
-    data_loader = DataLoader(data, batch_size, shuffle=True)
+    data_loader = DataLoader(data, batch_size, shuffle=shuffle)
     null_f = None if progress else open(os.devnull, "w")
     epoch_progress = tqdm(range(epoch), file=null_f)
     with torch.no_grad() if not train else nullcontext():
@@ -152,7 +156,8 @@ def train_or_eval(
             outputs_list = list[list[float]]()
             ids_list = list[int]()
             batch_progress = tqdm(data_loader, file=null_f)
-            for batch_data, batch_labels, batch_ids in batch_progress:
+            for item in batch_progress:
+                batch_data, batch_labels, batch_ids = item
                 ids_list.extend(batch_ids)
                 if interrupt_signal():
                     return model_result

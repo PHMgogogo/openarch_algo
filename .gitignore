@@ -19,3 +19,4 @@ __pycache__
 .vscode
 rules.json.lock
 dump.md
+ezcli_doc.md

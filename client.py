@@ -510,78 +510,150 @@ class service:
 
 
 class highlevel:
+    """High-level shortcut operations built on top of the framework algorithm
+
+    These helpers wrap common end-to-end workflows (spawn a temporary framework
+    instance, load a model, run inference, restart, delete) so that callers do
+    not need to manually orchestrate templates, instances and proxy rules.
+    """
+
     @staticmethod
     def create() -> dict:
-        uid = str(uuid.uuid4())
-        template = process.templates.info("framework")
-        template["is_temporary"] = True
-        template["id"] = uid
-        template.setdefault("rules", []).append(
-            {
-                "name": uid,
-                "order": -1,
-                "rule_type": "PREFIX",
-                "pattern": f"/{uid}",
-                "dest_index": [1],
-                "dest_format": "/%s",
-                "rewrite_host": "127.0.0.1:0",
-                "default_entrance": f"/{uid}/?prefix={uid}",
-            }
-        )
-        entry = template["entry"] + f" --root-path /{uid}"
-        r = process.templates.create(
-            template["algorithm"]["id"],
-            template["id"],
-            entry,
-            template["restart_always"],
-            template["is_temporary"],
-            template["volume"],
-            template["restart_interval_seconds"],
-            template["bind_listener"],
-            template["rules"],
-        )
-        # print(r)
-        process.instances.create(uid, uid, entry)
-        result = {
-            "instance_id": uid,
-            "entrance": f"{SERVICE_ROOT_URL}/{uid}/openapi.json",
-            "base_url": f"{SERVICE_ROOT_URL}/{uid}",
-            "doc_url": f"{SERVICE_ROOT_URL}/{uid}/docs",
-            "index_url": f"{SERVICE_ROOT_URL}/{uid}/?prefix={uid}",
-            "help": (
-                "Algorithm service is now online. "
-                "POST {base_url}/load to load a model, "
-                "GET {base_url}/openapi.json to learn about other interfaces."
-            ),
-        }
-        return result
+        """Create and start a new temporary framework instance
 
-    def load(instance_id: str, path: str = None) -> dict:
-        if path is not None:
-            path = os.path.abspath(path)
-        iid = process.instances.info(instance_id)["id"]
-        requests.post(f"{SERVICE_ROOT_URL}/{iid}/load", json={"path": path})
-        return auto(requests.get(f"{SERVICE_ROOT_URL}/{iid}/state"))
+        Spawns an instance from the built-in `framework` template with an
+        auto-generated UUID, registers a dedicated proxy rule that routes
+        ``/{uuid}`` traffic to the instance, and returns the created instance
+        metadata.
+        If there is no clear specification of what algorithm or instance to create,
+        then this feature should be used to create the default algorithm.
+        The model will auto load (without weights) after create.
 
+        Returns:
+            dict: Information about the newly created instance, including its
+            generated id used for subsequent load/infer/restart/delete calls.
+        """
+        return auto(requests.get(f"{PROCESS_MANAGER_URL}/highlevel"))
+
+    @staticmethod
+    def delete(instance_id_or_prefix: str) -> dict:
+        """Delete a high-level instance
+
+        Stops the underlying process (if running) and removes the instance
+        along with its proxy rule.
+
+        Args:
+            instance_id_or_prefix: Instance ID or unique prefix to delete
+        """
+        return auto(requests.delete(f"{PROCESS_MANAGER_URL}/highlevel/{instance_id_or_prefix}"))
+
+    @staticmethod
+    def load(instance_id_or_prefix: str, path: str = None) -> dict:
+        """Load a model checkpoint into the framework instance
+
+        Proxies a ``/load`` request to the framework server running inside the
+        instance and then returns its current state.
+        The path can be None, indicating that a model is initialized without weights.
+        If the model is not loaded, the instance is essentially unusable
+
+        Args:
+            instance_id_or_prefix: Instance ID or unique prefix
+            path: Path to the model checkpoint to load (resolved on the server side). 
+
+        Returns:
+            dict: State response from the framework server after loading
+        """
+        return auto(
+            requests.post(
+                f"{PROCESS_MANAGER_URL}/highlevel/{instance_id_or_prefix}/load",
+                json={"path": path},
+            )
+        )
+
+    @staticmethod
+    def restart(instance_id_or_prefix: str) -> dict:
+        """Restart a high-level instance
+
+        Triggers the process manager to stop the instance; if the underlying
+        template is configured with ``restart_always``, the process manager
+        will bring it back up automatically.
+        For highlevel instances, restart_always=True,
+        so this corresponds to restarting the instance.
+
+        Args:
+            instance_id_or_prefix: Instance ID or unique prefix to restart
+        """
+        return auto(
+            requests.get(f"{PROCESS_MANAGER_URL}/highlevel/{instance_id_or_prefix}/restart")
+        )
+
+    @staticmethod
     def infer(instance_id: str, csv_path: str, data_cols: list[str]) -> dict:
+        """Run inference on a CSV dataset using a loaded framework instance
+
+        The local ``csv_path`` is converted to an absolute path and sent to the
+        framework server, which loads the CSV (using the given ``data_cols`` as
+        input columns), runs inference, waits for completion, and returns the
+        final state including results.
+
+        Args:
+            instance_id: Target instance ID (must already have a model loaded)
+            csv_path: Local path to the CSV dataset; will be resolved to an absolute path
+            data_cols: Names of the columns in the CSV to be used as model input features
+
+        Returns:
+            dict: Final state response from the framework server, including inference results
+        """
         csv_path = os.path.abspath(csv_path)
-        iid = process.instances.info(instance_id)["id"]
-        requests.post(
-            f"{SERVICE_ROOT_URL}/{iid}/infer",
-            json={
-                "dataset": {
-                    "content_type": "path_csv",
-                    "content": csv_path,
-                    "data_cols": data_cols,
-                }
-            },
+        return auto(
+            requests.post(
+                f"{PROCESS_MANAGER_URL}/highlevel/{instance_id}/infer",
+                json={
+                    "dataset": {
+                        "content_type": "path_csv",
+                        "content": csv_path,
+                        "data_cols": data_cols,
+                    }
+                },
+            )
         )
-        requests.get(f"{SERVICE_ROOT_URL}/{iid}/wait")
-        return auto(requests.get(f"{SERVICE_ROOT_URL}/{iid}/state"))
+    @staticmethod
+    def train(instance_id: str, csv_path: str, data_cols: list[str],label_cols:list[str],epoch:int = 1) -> dict:
+        """Run training on a CSV dataset using a loaded framework instance
 
-    def delete(instance_id: str) -> dict:
-        return process.instances.delete(instance_id)
+        The local ``csv_path`` is converted to an absolute path and sent to the
+        framework server, which loads the CSV (using ``data_cols`` as input
+        feature columns and ``label_cols`` as label columns), trains the model
+        for the given number of epochs, waits for completion, and returns the
+        final state including training results.
 
+        Args:
+            instance_id: Target instance ID (must already have a model loaded)
+            csv_path: Local path to the CSV dataset; will be resolved to an absolute path
+            data_cols: Names of the columns in the CSV to be used as model input features
+            label_cols: Names of the columns in the CSV to be used as training labels
+            epoch: Number of training epochs to run (default: 1)
+
+        Returns:
+            dict: Final state response from the framework server, including training results (only the last epoch)
+        """
+        csv_path = os.path.abspath(csv_path)
+        return auto(
+            requests.post(
+                f"{PROCESS_MANAGER_URL}/highlevel/{instance_id}/train",
+                json={
+                    "dataset": {
+                        "content_type": "path_csv",
+                        "content": csv_path,
+                        "data_cols": data_cols,
+                        "label_cols":label_cols,
+                    },
+                    "args":{
+                        "epoch":epoch
+                    }
+                },
+            )
+        )
 
 def _parse_docstring(docstring: str) -> tuple[str, dict[str, str]]:
     if not docstring:
@@ -731,7 +803,9 @@ def _get_type_converter(type_hint):
     return str
 
 
-def get_parser(prog: str = None) -> argparse.ArgumentParser:
+def get_parser(
+    prog: str = None, includes: set[str] = None
+) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=prog, description="OpenArch Algo API Command Line Client"
     )
@@ -742,6 +816,8 @@ def get_parser(prog: str = None) -> argparse.ArgumentParser:
     current_module = sys.modules[__name__]
     for top_level_name in dir(current_module):
         if top_level_name.startswith("_"):
+            continue
+        if includes is not None and top_level_name not in includes:
             continue
         obj = getattr(current_module, top_level_name)
         if isinstance(obj, type) and obj.__module__ == current_module.__name__:
@@ -771,9 +847,13 @@ def collect_all_help(parser: argparse.ArgumentParser) -> dict[str, str]:
     return result
 
 
-def doc(prog: str = None, parser: argparse.ArgumentParser = None) -> str:
+def doc(
+    prog: str = None,
+    parser: argparse.ArgumentParser = None,
+    includes: set[str] = None,
+) -> str:
     if parser is None:
-        parser = get_parser(prog)
+        parser = get_parser(prog, includes=includes)
     results = []
     all_help = collect_all_help(parser)
     for cmd, help_text in all_help.items():

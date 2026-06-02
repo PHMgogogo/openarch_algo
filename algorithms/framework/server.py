@@ -42,14 +42,18 @@ class Container:
 
     def __init__(self):
         self.result = []
+        self._load()
 
-    async def load(self, path: str | None = None) -> None:
+    def _load(self, path: str | None = "./model.pth") -> None:
         if self.state != State.UNLOADED:
             raise RuntimeError(f"Cannot load from state {self.state}")
         self.model = base.Model()
-        if path is not None:
+        if path is not None and os.path.exists(path):
             self.model.load_state_dict(path)
         self.state = State.LOADED
+
+    async def load(self, path: str | None = "./model.pth") -> None:
+        self._load(path)
 
     async def unload(self) -> None:
         if self.state != State.LOADED:
@@ -64,7 +68,7 @@ class Container:
         torch.cuda.empty_cache()
         self.state = State.UNLOADED
 
-    async def save(self, path: str) -> None:
+    async def save(self, path: str = "./model.pth") -> None:
         if self.state != State.LOADED:
             raise RuntimeError(f"Cannot save from state {self.state}")
         torch.save(path, self.model.state_dict())
@@ -179,6 +183,7 @@ class JsonCSV(BaseModel):
         )
         writer = csv.writer(f)
         writer.writerows(self.rows)
+        f.close()
         return f.name
 
 
@@ -186,7 +191,7 @@ class DatasetRequest(BaseModel):
     content_type: typing.Literal["path_csv", "json_csv", "text_csv"]
     content: str | JsonCSV | typing.Any
     data_cols: list[str]
-    label_cols: list[str] = None
+    label_cols: list[str] | None = None
 
     def get(self) -> base.TableByRowDataset:
         if self.content_type == "path_csv":
@@ -200,6 +205,7 @@ class DatasetRequest(BaseModel):
                 mode="w", suffix=".csv", newline="", encoding="utf-8", delete=False
             )
             f.write(self.content)
+            f.close()
             return base.TableByRowDataset(f.name, self.data_cols, self.label_cols)
 
 
@@ -260,13 +266,13 @@ def create_app() -> FastAPI:
             infer_request.dataset.get(), infer_request.args, infer_request.detach
         )
 
-    @app.get("/state")
-    async def state():
+    @app.get("/state/{n}")
+    async def state(n:int=1):
         return ProgressResponse(
             state=str(c.state),
             epoch_progress=c.epoch_progress,
             batch_progress=c.batch_progress,
-            result=c.result,
+            result=c.result[-n:],
         )
 
     @app.get("/wait")

@@ -118,10 +118,10 @@ async def llm_response(
 ) -> AsyncGenerator[str | Function, None]:
     if context is None:
         context = [ContextItem("user", [text_content("hello")])]
-    client = openai.AsyncOpenAI(
+    oclient = openai.AsyncOpenAI(
         api_key=llm_config.api_key, base_url=llm_config.base_url
     )
-    stream = await client.responses.create(
+    stream = await oclient.responses.create(
         model=llm_config.model_name,
         input=context,
         stream=True,
@@ -139,10 +139,6 @@ async def llm_response(
                     call_id=event.item.call_id,
                     arguments=json.loads(event.item.arguments),
                 )
-        # elif event.type == "response.completed":
-        #     if tool_call_result:
-        #         yield list(tool_call_result.values())
-
 
 def add_context_to(
     context: Context = None,
@@ -181,6 +177,7 @@ def load_prompt_to(
 ) -> Context:
     prompt = open(path, encoding="utf-8").read()
     prompt = prompt.replace("{{EZCLI_DOC}}", ezcli_doc)
+    open("ezcli_doc.md","w",encoding="utf-8").write(ezcli_doc)
     return add_context_to(context, "system", [text_content(prompt)])
 
 

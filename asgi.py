@@ -8,7 +8,10 @@ from contextlib import asynccontextmanager
 from manager import ProcessManager, AsyncIOWrapper
 from entity import Template, Algorithm
 from algorithms.openarch_gateway.entity import UrlProxyRule
-
+from algorithms.framework.server import InferRequest,TrainRequest
+import uuid
+import aiohttp
+aclient = aiohttp.ClientSession()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,7 +46,7 @@ class CreateInstanceRequest(BaseModel):
 
 
 class PathRequest(BaseModel):
-    path: str
+    path: str | None
 
 
 class CatRequest(BaseModel):
@@ -65,6 +68,16 @@ class AlgorithmResponse(BaseModel):
     version: str
     description: str
     tree: Optional[dict[str, dict | None]] = None
+
+
+class HighLevelCreateResponse(BaseModel):
+    instance_id: str
+    entrance: str
+    base_url: str
+    doc_url: str
+    index_url: str
+    file_path: str
+    help: str
 
 
 @app.get("/algorithms/{algorithm_id}", response_model=AlgorithmResponse)
@@ -235,6 +248,77 @@ async def delete_instance(instance_id: str, force: bool = True):
     return {"message": "Instance deleted"}
 
 
+@app.get("/highlevel")
+async def highlevel_create():
+    uid = str(uuid.uuid4())
+    template = await get_template_detail("framework")
+    template.is_temporary = True
+    template.id = uid
+    if template.rules is None:
+        template.rules = []
+    template.rules.append(
+        UrlProxyRule(
+            name=uid,
+            order=-1,
+            rule_type="PREFIX",
+            pattern=f"/{uid}",
+            dest_index=[1],
+            dest_format="/%s",
+            rewrite_host="127.0.0.1:0",
+            default_entrance=f"/{uid}/?prefix={uid}",
+        )
+    )
+    entry = template.entry + f" --root-path /{uid}"
+    r = await create_template(template)
+    await create_instance(CreateInstanceRequest(template_id=uid, id=uid, entry=entry))
+    instance = pm.get_instance(uid)
+    return HighLevelCreateResponse(
+        instance_id=uid,
+        entrance=f"./{uid}/openapi.json",
+        base_url=f"./{uid}",
+        doc_url=f"./{uid}/docs",
+        index_url=f"./{uid}?prefix={uid}",
+        help=(
+            "Algorithm service is now online. "
+            "POST {base_url}/load to load a model, "
+            "GET {base_url}/openapi.json to learn about other interfaces."
+        ),
+        file_path=instance.path
+    )
+@app.delete("/highlevel/{instance_id_or_prefix}")
+async def highlevel_delete(instance_id_or_prefix:str):
+    return await delete_instance(instance_id=instance_id_or_prefix)
+
+@app.post("/highlevel/{instance_id_or_prefix}/load")
+async def highlevel_load(instance_id_or_prefix:str,path_request:PathRequest):
+    instance = pm.get_instance(instance_id_or_prefix)
+    load_url = f"http://{instance.template.rules[-1].rewrite_host}/load"
+    async with aclient.post(load_url,json=path_request.model_dump()) as r:
+        await r.text()
+    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/state") as r:
+        return await r.json()
+
+@app.get("/highlevel/{instance_id_or_prefix}/restart")
+async def highlevel_restart(instance_id_or_prefix:str):
+    return await pm.stop(instance_id_or_prefix)
+@app.post("/highlevel/{instance_id_or_prefix}/infer")
+async def highlevel_infer(instance_id_or_prefix:str,infer_request:InferRequest):
+    instance = pm.get_instance(instance_id_or_prefix)
+    async with aclient.post(f"http://{instance.template.rules[-1].rewrite_host}/infer",json=infer_request.model_dump()) as r:
+        await r.text()
+    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/wait") as r:
+        await r.text()
+    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/state") as r:
+        return await r.json()
+@app.post("/highlevel/{instance_id_or_prefix}/train")
+async def highlevel_train(instance_id_or_prefix:str,train_request:TrainRequest):
+    instance = pm.get_instance(instance_id_or_prefix)
+    async with aclient.post(f"http://{instance.template.rules[-1].rewrite_host}/train",json=train_request.model_dump()) as r:
+        await r.text()
+    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/wait") as r:
+        await r.text()
+    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/state") as r:
+        return await r.json()
 async def attach_ws_recv_loop(instance_id: str, websocket: WebSocket):
     while True:
         data = await websocket.receive_bytes()
