@@ -295,7 +295,7 @@ async def highlevel_load(instance_id_or_prefix:str,path_request:PathRequest):
     load_url = f"http://{instance.template.rules[-1].rewrite_host}/load"
     async with aclient.post(load_url,json=path_request.model_dump()) as r:
         await r.text()
-    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/state") as r:
+    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/state/1") as r:
         return await r.json()
 
 @app.get("/highlevel/{instance_id_or_prefix}/restart")
@@ -308,7 +308,7 @@ async def highlevel_infer(instance_id_or_prefix:str,infer_request:InferRequest):
         await r.text()
     async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/wait") as r:
         await r.text()
-    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/state") as r:
+    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/state/1") as r:
         return await r.json()
 @app.post("/highlevel/{instance_id_or_prefix}/train")
 async def highlevel_train(instance_id_or_prefix:str,train_request:TrainRequest):
@@ -317,7 +317,7 @@ async def highlevel_train(instance_id_or_prefix:str,train_request:TrainRequest):
         await r.text()
     async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/wait") as r:
         await r.text()
-    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/state") as r:
+    async with aclient.get(f"http://{instance.template.rules[-1].rewrite_host}/state/1") as r:
         return await r.json()
 async def attach_ws_recv_loop(instance_id: str, websocket: WebSocket):
     while True:
