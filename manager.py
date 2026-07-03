@@ -101,7 +101,7 @@ class ServiceHelper:
                             pattern=f"/{upr.name}",
                             dest_index=[1],
                             dest_format="/%s",
-                            cros=True
+                            cros=True,
                         )
                         instance.template.rules.append(upr)
                         need_save = True
@@ -243,6 +243,8 @@ class ProcessManager:
 
     async def remove_instance(self, id_or_prefix: str, force: bool = False) -> None:
         instance = self.get_instance(id_or_prefix)
+        if not isinstance(instance, Instance):
+            return None
         await self.stop(instance.id, force)
         del self.instances[instance.id]
         del self.processes[instance.id]

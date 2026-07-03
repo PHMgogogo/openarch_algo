@@ -6,7 +6,6 @@ import json
 import sys
 from typing import Literal, get_type_hints, Any
 import os
-
 PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8001/api/pmgr")
 SERVICE_MANAGER_URL = os.getenv("SERVICE_MANAGER_URL", "http://127.0.0.1:8001/smgr")
 SERVICE_ROOT_URL = os.getenv("SERVICE_ROOT_URL", "http://127.0.0.1:8001")

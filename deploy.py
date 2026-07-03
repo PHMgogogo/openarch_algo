@@ -22,7 +22,12 @@ try:
     print(client.process.instances.delete("agent"))
 except:
     pass
+try:
+    print(client.process.instances.delete("storage"))
+except:
+    pass
 print(client.process.instances.create("gateway", "gateway"))
 print(client.process.instances.create("agent", "agent"))
+print(client.process.instances.create("storage", "storage"))
 print(f"Visit {client.PROCESS_MANAGER_URL}/index.html to get started")
 print("Done.")
