@@ -24,5 +24,5 @@ except:
     pass
 print(client.process.instances.create("gateway", "gateway"))
 print(client.process.instances.create("agent", "agent"))
-print(f"Visit {client.RULE_MANAGER_URL}/index.html to get started")
+print(f"Visit {client.PROCESS_MANAGER_URL}/index.html to get started")
 print("Done.")

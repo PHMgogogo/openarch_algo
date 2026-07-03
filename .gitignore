@@ -4,6 +4,8 @@ algorithms/*
 !algorithms/openarch_gateway/
 !algorithms/ez_agent/
 !algorithms/framework/
+!algorithms/open_storage/
+algorithms/open_storage/storage/*
 algorithms/ez_agent/.env
 algorithms/ez_agent/context.md
 algorithms/ez_agent/client.py
@@ -15,6 +17,7 @@ templates/*
 !templates/ez_agent.json
 !templates/gateway.json
 !templates/framework.json
+!templates/storage.json
 __pycache__
 .vscode
 rules.json.lock

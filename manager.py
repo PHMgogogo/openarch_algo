@@ -101,6 +101,7 @@ class ServiceHelper:
                             pattern=f"/{upr.name}",
                             dest_index=[1],
                             dest_format="/%s",
+                            cros=True
                         )
                         instance.template.rules.append(upr)
                         need_save = True
@@ -109,7 +110,7 @@ class ServiceHelper:
                         upr.rewrite_host = f"127.0.0.1:{port}"
                     if need_save:
                         instance.save()
-                    self.add(instance.id, upr)
+                        self.add(instance.id, upr)
                 except Exception as e:
                     traceback.print_exc()
 
@@ -268,7 +269,8 @@ class ProcessManager:
         instance = self.instances[self.create_instance(template, id)]
         await instance.get_ready()
         instance.save()
-        await self.exec(instance.id)
+        if not instance.template.restart_always:
+            await self.exec(instance.id)
         return instance.id
 
     async def cat(
@@ -335,6 +337,7 @@ class ProcessManager:
         )
         self.processes[id]["0"] = process
         self.iowrappers[id]["0"] = dict[str, AsyncIOWrapper]()
+        print(id, "Changing Status to RUNNING")
         instance.status = InstanceStatus.RUNNING
         instance.start_time = datetime.now()
 
@@ -507,6 +510,8 @@ class ProcessManager:
                     elif hasattr(v, "_asdict"):
                         conn_dict[k] = v._asdict()
                     elif isinstance(v, tuple):
+                        conn_dict[k] = None
+                    elif v == "":
                         conn_dict[k] = None
                 conns.append(conn_dict)
             result.append(

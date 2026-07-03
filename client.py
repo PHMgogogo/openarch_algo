@@ -6,10 +6,8 @@ import json
 import sys
 from typing import Literal, get_type_hints, Any
 import os
-import time
-import uuid
 
-PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8001/pmgr")
+PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8001/api/pmgr")
 SERVICE_MANAGER_URL = os.getenv("SERVICE_MANAGER_URL", "http://127.0.0.1:8001/smgr")
 SERVICE_ROOT_URL = os.getenv("SERVICE_ROOT_URL", "http://127.0.0.1:8001")
 
@@ -391,6 +389,7 @@ class service:
         enable: bool = True,
         file_serve_root_path: str = None,
         default_entrance: str = None,
+        cors: bool = False,
     ):
         """Add or update a routing rule
 
@@ -422,6 +421,7 @@ class service:
                     "enable": enable,
                     "file_serve_root_path": file_serve_root_path,
                     "default_entrance": default_entrance,
+                    "cors": cors,
                 },
             )
         )
@@ -518,6 +518,20 @@ class highlevel:
     """
 
     @staticmethod
+    def state(instance_id_or_prefix: str) -> dict:
+        """Query the runtime state of a framework instance
+
+        Accepts either a full instance UUID or a unique prefix thereof,
+        and returns the current state dict from the instance's internal
+        ``/state/1`` endpoint.
+        """
+        return auto(
+            requests.get(
+                f"{PROCESS_MANAGER_URL}/highlevel/{instance_id_or_prefix}/state"
+            )
+        )
+
+    @staticmethod
     def create() -> dict:
         """Create and start a new temporary framework instance
 
@@ -545,7 +559,9 @@ class highlevel:
         Args:
             instance_id_or_prefix: Instance ID or unique prefix to delete
         """
-        return auto(requests.delete(f"{PROCESS_MANAGER_URL}/highlevel/{instance_id_or_prefix}"))
+        return auto(
+            requests.delete(f"{PROCESS_MANAGER_URL}/highlevel/{instance_id_or_prefix}")
+        )
 
     @staticmethod
     def load(instance_id_or_prefix: str, path: str = None) -> dict:
@@ -558,7 +574,7 @@ class highlevel:
 
         Args:
             instance_id_or_prefix: Instance ID or unique prefix
-            path: Path to the model checkpoint to load (resolved on the server side). 
+            path: Path to the model checkpoint to load (resolved on the server side).
 
         Returns:
             dict: State response from the framework server after loading
@@ -584,7 +600,9 @@ class highlevel:
             instance_id_or_prefix: Instance ID or unique prefix to restart
         """
         return auto(
-            requests.get(f"{PROCESS_MANAGER_URL}/highlevel/{instance_id_or_prefix}/restart")
+            requests.get(
+                f"{PROCESS_MANAGER_URL}/highlevel/{instance_id_or_prefix}/restart"
+            )
         )
 
     @staticmethod
@@ -617,8 +635,15 @@ class highlevel:
                 },
             )
         )
+
     @staticmethod
-    def train(instance_id: str, csv_path: str, data_cols: list[str],label_cols:list[str],epoch:int = 1) -> dict:
+    def train(
+        instance_id: str,
+        csv_path: str,
+        data_cols: list[str],
+        label_cols: list[str],
+        epoch: int = 1,
+    ) -> dict:
         """Run training on a CSV dataset using a loaded framework instance
 
         The local ``csv_path`` is converted to an absolute path and sent to the
@@ -646,14 +671,13 @@ class highlevel:
                         "content_type": "path_csv",
                         "content": csv_path,
                         "data_cols": data_cols,
-                        "label_cols":label_cols,
+                        "label_cols": label_cols,
                     },
-                    "args":{
-                        "epoch":epoch
-                    }
+                    "args": {"epoch": epoch},
                 },
             )
         )
+
 
 def _parse_docstring(docstring: str) -> tuple[str, dict[str, str]]:
     if not docstring:
@@ -803,9 +827,7 @@ def _get_type_converter(type_hint):
     return str
 
 
-def get_parser(
-    prog: str = None, includes: set[str] = None
-) -> argparse.ArgumentParser:
+def get_parser(prog: str = None, includes: set[str] = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=prog, description="OpenArch Algo API Command Line Client"
     )

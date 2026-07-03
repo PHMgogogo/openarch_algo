@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import json
 import os
 from contextlib import asynccontextmanager
+from starlette.middleware.base import BaseHTTPMiddleware
 from filelock import FileLock
 import asyncio
 from entity import UrlProxyRule
@@ -142,6 +143,16 @@ def safe_file_response(path: str):
     return FileResponse(path)
 
 
+class CorsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if getattr(request.state, "cors", False):
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.sm = ServiceManager()
@@ -163,6 +174,8 @@ async def lifespan(app: FastAPI):
                 dest = dest[1:]
             return safe_file_response(os.path.join(upr.file_serve_root_path, dest))
         raw_host = request.headers.get("host")
+        if upr.cors:
+            request.state.cors = True
         host = upr.host(raw_host)
         if host == raw_host:
             return PlainTextResponse("loop", status_code=508)
@@ -250,3 +263,4 @@ async def post_init(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(CorsMiddleware)

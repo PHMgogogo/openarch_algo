@@ -372,7 +372,6 @@ class Instance:
         else:
             os.makedirs(self.path, exist_ok=True)
             await self.template.algorithm.copy_to(self.path)
-        self.status = InstanceStatus.STOP
 
     def save(self):
         open(

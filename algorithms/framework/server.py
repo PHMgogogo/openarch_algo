@@ -1,6 +1,8 @@
 try:
     from . import base
 except ImportError:
+    import sys,os
+    sys.path.append(os.path.dirname(__file__))
     import base
 import fastapi
 from fastapi.responses import FileResponse
@@ -259,7 +261,6 @@ def create_app() -> FastAPI:
         return await c.train(
             train_request.dataset.get(), train_request.args, train_request.detach
         )
-
     @app.post("/infer")
     async def infer(infer_request: InferRequest):
         return await c.infer(
@@ -283,7 +284,11 @@ def create_app() -> FastAPI:
     async def stop():
         c.interrupt = True
         return
-
+    @app.options("{path:path}")
+    async def options_handler(path: str):
+        return fastapi.responses.Response(
+            status_code=200
+        )
     return app
 
 

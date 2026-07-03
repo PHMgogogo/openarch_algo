@@ -1,0 +1,48 @@
+{
+    "algorithm": {
+        "id": "open_storage",
+        "version": "",
+        "description": ""
+    },
+    "entry": "uvicorn server:app --host 0.0.0.0 --port 8006 --root-path /api/storage",
+    "restart_always": true,
+    "id": "storage",
+    "is_temporary": false,
+    "restart_interval_seconds": 10.0,
+    "volume": true,
+    "bind_listener": false,
+    "rules": [
+        {
+            "name": "storage",
+            "order": -1,
+            "rule_type": "PREFIX",
+            "pattern": "/api/storage",
+            "dest_index": [
+                1
+            ],
+            "dest_format": "%s",
+            "rewrite_host": "127.0.0.1:8006",
+            "editable": true,
+            "timeout": null,
+            "enable": true,
+            "file_serve_root_path": null,
+            "default_entrance": "/api/storage/docs"
+        },
+        {
+            "name": "storage_file",
+            "order": -1,
+            "rule_type": "PREFIX",
+            "pattern": "/file/storage",
+            "dest_index": [
+                1
+            ],
+            "dest_format": "%s",
+            "rewrite_host": "127.0.0.1:8006",
+            "editable": true,
+            "timeout": null,
+            "enable": true,
+            "file_serve_root_path": "../open_storage/storage",
+            "default_entrance": "/api/storage/docs"
+        }
+    ]
+}

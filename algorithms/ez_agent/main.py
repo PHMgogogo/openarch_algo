@@ -9,7 +9,12 @@ from dataclasses import dataclass
 from rich.live import Live
 from rich.markdown import Markdown
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import (
+    StreamingResponse,
+    FileResponse,
+    JSONResponse,
+    PlainTextResponse,
+)
 from pydantic import BaseModel
 import json
 from typing_extensions import TypedDict
@@ -56,6 +61,7 @@ class TextContent(TypedDict):
 class ImageContent(TypedDict):
     image_url: str = ""
     type: Literal["input_image"] = "input_image"
+
 
 def text_content(item) -> TextContent:
     return TextContent(text=item, type="input_text")
@@ -140,6 +146,7 @@ async def llm_response(
                     arguments=json.loads(event.item.arguments),
                 )
 
+
 def add_context_to(
     context: Context = None,
     role: Literal["system", "assistant", "user"] = "system",
@@ -177,7 +184,7 @@ def load_prompt_to(
 ) -> Context:
     prompt = open(path, encoding="utf-8").read()
     prompt = prompt.replace("{{EZCLI_DOC}}", ezcli_doc)
-    open("ezcli_doc.md","w",encoding="utf-8").write(ezcli_doc)
+    open("ezcli_doc.md", "w", encoding="utf-8").write(ezcli_doc)
     return add_context_to(context, "system", [text_content(prompt)])
 
 
@@ -337,6 +344,28 @@ async def interact(i_request: InteractRequest):
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(generator(), media_type="text/event-stream")
+
+
+@app.post("/interact/tool")
+async def interact_tool(i_request: InteractRequest) -> ContextItem:
+    if len(i_request.context) <= 0:
+        i_request.context = load_prompt_to(ezcli_doc=client.doc("ezcli"))
+        # i_request.context.append(
+        #     ContextItem(
+        #         role="system",
+        #         content=list[TextContent(text="")],
+        #     )
+        # )
+    async for output, delta, ctx in single_progress_headless(
+        i_request.user_input, i_request.context
+    ):
+        pass
+    return JSONResponse(content=ctx[-1])
+
+
+@app.get("/ezcli/doc")
+async def ezcli_doc() -> str:
+    return PlainTextResponse(client.doc("ezcli"))
 
 
 @app.get("/")

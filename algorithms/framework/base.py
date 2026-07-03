@@ -9,6 +9,7 @@ import inspect
 from pydantic import BaseModel
 import os
 from contextlib import nullcontext
+import math
 
 
 class TableByRowDataset(Dataset):
@@ -71,6 +72,7 @@ class ModelResult(BaseModel):
     loss: float
     outputs: list[list[float]]
     ids: list[int]
+    description: str = ""
 
     def code(self) -> str:
         return inspect.getsource(self.__class__)
@@ -82,9 +84,9 @@ class Model(nn.Module):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Linear(1, 4),
-            nn.ReLU(),
+            nn.Sigmoid(),
             nn.Linear(4, 4),
-            nn.ReLU(),
+            nn.Sigmoid(),
             nn.Linear(4, 1),
         )
 
@@ -139,7 +141,7 @@ def train_or_eval(
         criterion = nn.MSELoss()
     if train:
         if optimizer is None:
-            optimizer = optim.SGD(model.parameters(), lr=learning_rate)
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
         model.train()
     else:
         epoch = 1
@@ -167,20 +169,25 @@ def train_or_eval(
                 if train:
                     optimizer.zero_grad()
                 outputs: torch.Tensor = model(batch_data)
-                outputs_list.extend(outputs.tolist())
+                outputs_list.extend(outputs.nan_to_num(0).tolist())
                 loss: torch.Tensor = criterion(outputs, batch_labels)
                 if train:
                     loss.backward()
                     optimizer.step()
                 total_loss += loss.item()
             avg_loss = total_loss / len(data)
+            if math.isnan(avg_loss):
+                avg_loss = 0
             r = ModelResult(loss=avg_loss, outputs=outputs_list, ids=ids_list)
+            if mode == "eval":
+                r.description = "Eval loss is computed with label = 0 while label cols were not specified."
             model_result.append(r)
             result_callback(result=r)
             batch_callback(**batch_progress.format_dict)
             tqdm.write(f"Epoch {ep}: Loss {avg_loss}", null_f)
     epoch_callback(**epoch_progress.format_dict)
     result_callback(done=True)
+    return model_result
 
 
 # </train-or-eval-content>

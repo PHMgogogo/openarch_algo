@@ -1,4 +1,4 @@
-# torch
+torch
 # ultralytics
 Pillow
 numpy
@@ -13,3 +13,8 @@ aiohttp
 uvicorn[standard]
 h2
 rich
+psutil
+requests
+pandas
+tqdm
+openai

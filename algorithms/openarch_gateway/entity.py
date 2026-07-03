@@ -28,6 +28,7 @@ class UrlProxyRule(BaseModel):
     enable: bool = True
     file_serve_root_path: str | None = None
     default_entrance: str | None = None
+    cors: bool | None = False
 
     def model_post_init(self, context):
         if self.dest_index is None and self.rule_type == RuleType.EXACT:
