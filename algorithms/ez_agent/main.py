@@ -5,7 +5,6 @@ import os
 from dotenv import load_dotenv
 import openai
 import asyncio
-from dataclasses import dataclass
 from rich.live import Live
 from rich.markdown import Markdown
 from fastapi import FastAPI
@@ -76,13 +75,22 @@ class ContextItem(TypedDict):
     content: list[TextContent | ImageContent] = None
 
 
-class FunctionContextItem(TypedDict):
+class FunctionCallContextItem(TypedDict):
+    type: Literal["function_call"] = "function_call"
+    name: str
+    arguments: str | dict
+    call_id: str
+
+
+class FunctionCallOutputContextItem(TypedDict):
     type: Literal["function_call_output"] = "function_call_output"
     call_id: str
     output: str
 
 
-Context: TypeAlias = list[ContextItem | FunctionContextItem]
+Context: TypeAlias = list[
+    ContextItem | FunctionCallContextItem | FunctionCallOutputContextItem
+]
 
 
 class EzcliParams(BaseModel):
@@ -108,6 +116,15 @@ class OpenAITool(BaseModel):
     description: str
     parameters: openai.types.FunctionParameters
     strict: bool = True
+
+
+class CallRequest(BaseModel):
+    args: str
+
+
+class CallResponse(BaseModel):
+    output: str
+    cat_content: TextContent | ImageContent | None
 
 
 tool = OpenAITool(
@@ -149,7 +166,7 @@ async def llm_response(
 
 def add_context_to(
     context: Context = None,
-    role: Literal["system", "assistant", "user"] = "system",
+    role: Literal["system", "assistant", "user", "tool"] = "system",
     content: list[TextContent | ImageContent] = None,
     copy: bool = False,
 ) -> Context:
@@ -164,6 +181,8 @@ def add_context_to(
 
 def add_f_context_to(
     context: Context = None,
+    name: str = "",
+    arguments: str = "",
     call_id: str = "",
     content: str = "",
     copy: bool = False,
@@ -172,7 +191,11 @@ def add_f_context_to(
         context = []
     elif copy:
         context = context.copy()
-    citem = FunctionContextItem(
+    citem = FunctionCallContextItem(
+        type="function_call", name=name, arguments=arguments, call_id=call_id
+    )
+    context.append(citem)
+    citem = FunctionCallOutputContextItem(
         type="function_call_output", call_id=call_id, output=content
     )
     context.append(citem)
@@ -188,6 +211,53 @@ def load_prompt_to(
     return add_context_to(context, "system", [text_content(prompt)])
 
 
+async def _ezcli_call(name: str, args: str) -> tuple[str, TextContent | ImageContent]:
+    cat_content = None
+    tool_output = ""
+    raw_cmd = f"{name} {args}"
+    cmd = f"python client.py {args}"
+    env = os.environ.copy()
+    env.update({"PYTHONENCODING": "utf-8", "PYTHONUTF8": "1"})
+    proc = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        limit=1024 * 1024 * 20,  # 20MB
+        env=env,
+    )
+    stdout_data, stderr_data = await proc.communicate()
+    if proc.returncode == 0:
+        tool_output += f"\n```{raw_cmd}\n"
+        if stdout_data is not None:
+            stdout_str = stdout_data.decode("utf-8")
+            is_cat = False
+            try:
+                out_obj = json.loads(stdout_str)
+                file_type = out_obj.get("file_type")
+                if file_type in ["image", "text"]:
+                    is_cat = True
+                    data = out_obj["chunk_content"]
+                    del out_obj["chunk_content"]
+                    tool_output += json.dumps(out_obj)
+                    tool_output += "\n```\n"
+                    if file_type == "image":
+                        cat_content = image_content(data)
+                    else:
+                        cat_content = text_content(data[-EXECUTE_OUTPUT_MAX_LEN:])
+            except:
+                pass
+            if not is_cat:
+                tool_output += stdout_str[-EXECUTE_OUTPUT_MAX_LEN:]
+        tool_output += "```\n"
+    else:
+        tool_output += f"\n```{raw_cmd}\n"
+        if stderr_data is not None:
+            stderr_str = stderr_data.decode("utf-8")
+            tool_output += stderr_str[-EXECUTE_OUTPUT_MAX_LEN:]
+        tool_output += "```\n"
+    return tool_output, cat_content
+
+
 async def _single_progress(
     user_input: str, context: Context = None
 ) -> AsyncGenerator[tuple[str, str, Context], None]:
@@ -201,7 +271,6 @@ async def _single_progress(
         delta_str: str = ""
         should_response_again = False
         async for delta in llm_response(context):
-            cat_content = None
             if isinstance(delta, Function):
                 func = delta
                 if not func.name == "ezcli":
@@ -210,57 +279,16 @@ async def _single_progress(
                 args = EzcliParams.model_validate(func.arguments).args
                 should_response_again = True
                 raw_cmd = func.name + " " + args
-                cmd = "python client.py " + args
                 invoked_str = f"\n**已调用** `{raw_cmd}`\n\n"
                 delta_str = invoked_str
                 output_str += delta_str
-                # yield output_str, delta_str, context
                 add_context_to(context, "assistant", [text_content(output_str)])
                 yield None, None, context
                 output_str = ""
-                env = os.environ.copy()
-                env.update({"PYTHONENCODING": "utf-8", "PYTHONUTF8": "1"})
-                proc = await asyncio.create_subprocess_shell(
-                    cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    limit=1024 * 1024 * 20,  # 20MB
-                    env=env,
+                tool_output, cat_content = await _ezcli_call(func.name, args)
+                add_f_context_to(
+                    context, func.name, func.arguments, func.call_id, tool_output
                 )
-                stdout_data, stderr_data = await proc.communicate()
-                if proc.returncode == 0:
-                    tool_output += f"\n```{raw_cmd}\n"
-                    if stdout_data is not None:
-                        stdout_str = stdout_data.decode("utf-8")
-                        is_cat = False
-                        try:
-                            out_obj = json.loads(stdout_str)
-                            file_type = out_obj.get("file_type")
-                            if file_type in ["image", "text"]:
-                                is_cat = True
-                                data = out_obj["chunk_content"]
-                                del out_obj["chunk_content"]
-                                tool_output += json.dumps(out_obj)
-                                tool_output += "\n```\n"
-                                if file_type == "image":
-                                    cat_content = image_content(data)
-                                else:
-                                    cat_content = text_content(
-                                        data[-EXECUTE_OUTPUT_MAX_LEN:]
-                                    )
-                        except:
-                            pass
-                        if not is_cat:
-                            tool_output += stdout_str[-EXECUTE_OUTPUT_MAX_LEN:]
-                            tool_output += "```\n"
-                    # tool_output += "```\n"
-                else:
-                    tool_output += f"\n```{raw_cmd}\n"
-                    if stderr_data is not None:
-                        stderr_str = stderr_data.decode("utf-8")
-                        tool_output += stderr_str[-EXECUTE_OUTPUT_MAX_LEN:]
-                    tool_output += "```\n"
-                add_f_context_to(context, func.call_id, tool_output)
                 if cat_content is not None:
                     add_context_to(
                         context,
@@ -269,7 +297,6 @@ async def _single_progress(
                     )
                 else:
                     add_context_to(context, "system", [text_content("继续")])
-                    # pass
             else:
                 delta_str = delta
                 output_str += delta_str
@@ -350,12 +377,6 @@ async def interact(i_request: InteractRequest):
 async def interact_tool(i_request: InteractRequest) -> ContextItem:
     if len(i_request.context) <= 0:
         i_request.context = load_prompt_to(ezcli_doc=client.doc("ezcli"))
-        # i_request.context.append(
-        #     ContextItem(
-        #         role="system",
-        #         content=list[TextContent(text="")],
-        #     )
-        # )
     async for output, delta, ctx in single_progress_headless(
         i_request.user_input, i_request.context
     ):
@@ -366,6 +387,12 @@ async def interact_tool(i_request: InteractRequest) -> ContextItem:
 @app.get("/ezcli/doc")
 async def ezcli_doc() -> str:
     return PlainTextResponse(client.doc("ezcli"))
+
+
+@app.post("/ezcli/call")
+async def ezcli_call(creq: CallRequest) -> CallResponse:
+    output, content = await _ezcli_call("ezcli", creq.args)
+    return CallResponse(output=output, cat_content=content)
 
 
 @app.get("/")

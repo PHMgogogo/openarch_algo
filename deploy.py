@@ -10,7 +10,7 @@ path = os.path.join(
     ".env",
 )
 print(open(path).read())
-yn = input(f"I have confirmed that the content at {path} is valid (y/n): ")
+yn = input(f"\nI have confirmed that the content at {path} is valid (y/n): ")
 if yn not in ["y", "", "Y"]:
     print("Exit.")
     exit()
@@ -19,7 +19,7 @@ try:
 except:
     pass
 try:
-    print(client.process.instances.delete("agent"))
+    print(client.process.instances.delete("ezagent"))
 except:
     pass
 try:
@@ -27,7 +27,7 @@ try:
 except:
     pass
 print(client.process.instances.create("gateway", "gateway"))
-print(client.process.instances.create("agent", "agent"))
+print(client.process.instances.create("ezagent", "ezagent"))
 print(client.process.instances.create("storage", "storage"))
 print(f"Visit {client.PROCESS_MANAGER_URL}/index.html to get started")
 print("Done.")

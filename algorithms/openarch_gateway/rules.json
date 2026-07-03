@@ -207,5 +207,39 @@
         "file_serve_root_path": null,
         "default_entrance": "/opencode/global/health",
         "cors": false
+    },
+    {
+        "name": "ezagent",
+        "order": -1,
+        "rule_type": "PREFIX",
+        "pattern": "/ezagent",
+        "dest_index": [
+            1
+        ],
+        "dest_format": "%s",
+        "rewrite_host": "127.0.0.1:8002",
+        "editable": true,
+        "timeout": null,
+        "enable": true,
+        "file_serve_root_path": null,
+        "default_entrance": "/ezagent/index.html",
+        "cors": false
+    },
+    {
+        "name": "r2c2r",
+        "order": -1,
+        "rule_type": "PREFIX",
+        "pattern": "/r2c2r",
+        "dest_index": [
+            1
+        ],
+        "dest_format": "%s",
+        "rewrite_host": "127.0.0.1:8007",
+        "editable": true,
+        "timeout": null,
+        "enable": true,
+        "file_serve_root_path": null,
+        "default_entrance": "/r2c2r/v1/models",
+        "cors": false
     }
 ]

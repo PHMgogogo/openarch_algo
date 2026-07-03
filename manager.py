@@ -211,17 +211,22 @@ class ProcessManager:
             if not os.path.exists(instance_info_path):
                 return
             else:
-                instance_template = Template.model_validate_json(
-                    open(
-                        os.path.join(
-                            Config.instance_root_path,
-                            instance_name,
-                            Config.instance_info_path,
-                        ),
-                        encoding="utf-8",
-                    ).read()
-                )
-                self.create_instance(instance_template, instance_name)
+                try:
+                    instance_template = Template.model_validate_json(
+                        open(
+                            os.path.join(
+                                Config.instance_root_path,
+                                instance_name,
+                                Config.instance_info_path,
+                            ),
+                            encoding="utf-8",
+                        ).read()
+                    )
+                    self.create_instance(instance_template, instance_name)
+                except Exception as e:
+                    print(
+                        f"Skip Loading {instance_name}: {type(e).__name__}: {e}"
+                    )
 
     def load_instances_from_path(self) -> None:
         os.makedirs(Config.instance_root_path, exist_ok=True)

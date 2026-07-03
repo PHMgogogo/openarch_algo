@@ -6,6 +6,7 @@ import json
 import sys
 from typing import Literal, get_type_hints, Any
 import os
+
 PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8001/api/pmgr")
 SERVICE_MANAGER_URL = os.getenv("SERVICE_MANAGER_URL", "http://127.0.0.1:8001/smgr")
 SERVICE_ROOT_URL = os.getenv("SERVICE_ROOT_URL", "http://127.0.0.1:8001")
@@ -313,7 +314,59 @@ class process:
 
 
 class service:
-    """Rule/service manager operations for routing rules"""
+    """Rule/service manager operations for routing rules
+
+    The rewritten destination URL is constructed as:
+        dest_format % (groups[dest_index[0]], groups[dest_index[1]], ...)
+
+    where ``groups`` comes from matching the request path against ``pattern``
+    according to ``rule_type``:
+
+    - EXACT:   groups = [full_path]
+    - PREFIX:  groups = [matched_prefix, remaining_suffix]
+    - REGEX:   groups = list of regex capture groups (or [full_match] if no groups)
+
+    Examples
+    --------
+    PREFIX — strip /api prefix, forward /v2/<rest> to a different backend:
+
+        pattern="/api"
+        rule_type="PREFIX"
+        dest_index=[1]          # pick the suffix after /api
+        dest_format="/v2%s"     # prepend /v2
+        rewrite_host="backend.internal:8080"
+
+        Request: GET /api/users  →  proxy to backend.internal:8080/v2/users
+
+    REGEX — reorder capture groups to restructure the path:
+
+        pattern=r"/v1/(\\w+)/(\\d+)"
+        rule_type="REGEX"
+        dest_index=[1, 0]            # swap: (id, resource) → (resource, id)
+        dest_format="/api/%s/%s"
+
+        Request: GET /v1/user/42  →  dest = /api/42/user
+        (groups[0]="user", groups[1]="42", picked as [1,0] → "42","user")
+
+    EXACT — rewrite host only, keep path unchanged:
+
+        pattern="/health"
+        rule_type="EXACT"
+        dest_index=[0]
+        dest_format="%s"
+        rewrite_host="monitor.internal:9090"
+
+        Request: GET /health  →  proxy to monitor.internal:9090/health
+
+    File serving — serve static files from local disk (no proxy):
+
+        pattern="/static"
+        rule_type="PREFIX"
+        dest_index=[1]
+        file_serve_root_path="/var/www"
+
+        Request: GET /static/css/app.css  →  serve /var/www/css/app.css
+    """
 
     @staticmethod
     def get() -> dict:
@@ -341,6 +394,7 @@ class service:
         timeout: float = None,
         enable: bool = True,
         file_serve_root_path: str = None,
+        cors: bool = False,
     ):
         """Update an existing routing rule
 
@@ -355,6 +409,7 @@ class service:
             timeout: Custom timeout for this route in seconds
             enable: Enable or disable this rule
             file_serve_root_path: Root path for static file serving
+            cors: Add CORS Header on response
         """
         return auto(
             requests.put(
@@ -370,6 +425,7 @@ class service:
                     "timeout": timeout,
                     "enable": enable,
                     "file_serve_root_path": file_serve_root_path,
+                    "cors": cors,
                 },
             )
         )
@@ -403,6 +459,7 @@ class service:
             timeout: Custom timeout for this route in seconds
             enable: Enable or disable this rule
             file_serve_root_path: Root path for static file serving
+            cors: Add CORS Header on response
         """
         return auto(
             requests.put(
@@ -468,6 +525,7 @@ class service:
         timeout: float = None,
         enable: bool = True,
         file_serve_root_path: str = None,
+        cors: bool = False,
     ):
         """Test a routing rule without adding it
 
@@ -484,6 +542,7 @@ class service:
             timeout: Custom timeout for this route in seconds
             enable: Enable or disable this rule
             file_serve_root_path: Root path for static file serving
+            cors: Add CORS Header on response
         """
         return auto(
             requests.post(
@@ -502,6 +561,7 @@ class service:
                         "timeout": timeout,
                         "enable": enable,
                         "file_serve_root_path": file_serve_root_path,
+                        "cors": cors,
                     },
                 },
             )

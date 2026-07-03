@@ -26,7 +26,8 @@
             "timeout": null,
             "enable": true,
             "file_serve_root_path": null,
-            "default_entrance": "/api/storage/docs"
+            "default_entrance": "/api/storage/docs",
+            "cors": false
         },
         {
             "name": "storage_file",
@@ -42,7 +43,8 @@
             "timeout": null,
             "enable": true,
             "file_serve_root_path": "../open_storage/storage",
-            "default_entrance": "/api/storage/docs"
+            "default_entrance": "/api/storage/docs",
+            "cors": false
         }
     ]
 }

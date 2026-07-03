@@ -1,33 +1,31 @@
 {
     "algorithm": {
-        "id": "ez_agent",
+        "id": "r2c2r",
         "version": "",
         "description": ""
     },
-    "entry": "uvicorn main:app --host 0.0.0.0 --port 8002 --root-path /ezagent",
+    "entry": "python main.py",
     "restart_always": true,
-    "id": "ezagent",
+    "id": "r2c2r",
     "is_temporary": false,
     "restart_interval_seconds": 10.0,
     "volume": true,
-    "bind_listener": false,
     "rules": [
         {
-            "name": "ezagent",
+            "name": "r2c2r",
             "order": -1,
             "rule_type": "PREFIX",
-            "pattern": "/ezagent",
+            "pattern": "/r2c2r",
             "dest_index": [
                 1
             ],
             "dest_format": "%s",
-            "rewrite_host": "127.0.0.1:8002",
+            "rewrite_host": "127.0.0.1:8007",
             "editable": true,
             "timeout": null,
             "enable": true,
             "file_serve_root_path": null,
-            "default_entrance": "/ezagent/index.html",
-            "cors": false
+            "default_entrance": "/r2c2r/v1/models"
         }
     ]
 }
