@@ -10,6 +10,7 @@
     "is_temporary": false,
     "restart_interval_seconds": 10.0,
     "volume": true,
+    "bind_listener": false,
     "rules": [
         {
             "name": "yolo_http_server",
@@ -25,7 +26,8 @@
             "timeout": 60.0,
             "enable": true,
             "file_serve_root_path": null,
-            "default_entrance": "/yolo/docs"
+            "default_entrance": "/yolo/docs",
+            "cors": false
         }
     ]
 }

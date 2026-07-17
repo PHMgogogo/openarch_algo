@@ -56,7 +56,7 @@ class PathRequest(BaseModel):
 class CatRequest(BaseModel):
     path: str
     offset: int = 0
-    length: int = 0
+    length: int = 1024
     encoding: Literal["b64img"] | str = "utf-8"
     fmt: Optional[str] = None
 
@@ -384,12 +384,14 @@ async def attach_instance(instance_id: str, iowrapper_id: str, websocket: WebSoc
     )
     return
 
-
+@app.get("/rlfa")
+async def rlfa():
+    return await pm.restore_link_from_algorithms()
 @app.get("/console")
 async def get_console():
     return FileResponse("console.html")
 
 
-@app.get("{path:path}")
+@app.get("/index.html")
 async def read_root():
     return FileResponse("index.html")

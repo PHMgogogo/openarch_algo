@@ -1,7 +1,8 @@
 try:
     from . import base
 except ImportError:
-    import sys,os
+    import sys, os
+
     sys.path.append(os.path.dirname(__file__))
     import base
 import fastapi
@@ -51,7 +52,7 @@ class Container:
             raise RuntimeError(f"Cannot load from state {self.state}")
         self.model = base.Model()
         if path is not None and os.path.exists(path):
-            self.model.load_state_dict(path)
+            self.model.load_state_dict(torch.load(path))
         self.state = State.LOADED
 
     async def load(self, path: str | None = "./model.pth") -> None:
@@ -73,7 +74,7 @@ class Container:
     async def save(self, path: str = "./model.pth") -> None:
         if self.state != State.LOADED:
             raise RuntimeError(f"Cannot save from state {self.state}")
-        torch.save(path, self.model.state_dict())
+        torch.save(self.model.state_dict(), path)
 
     def set_criterion(self, criterion: nn.Module) -> None:
         self.criterion = criterion
@@ -246,13 +247,13 @@ def create_app() -> FastAPI:
 
     @app.post("/save")
     async def save(path_request: PathRequest):
-        return await c.save(path_request)
+        return await c.save(path_request.path)
 
     @app.post("/load")
     async def load(path_request: PathRequest):
         return await c.load(path_request.path)
 
-    @app.post("/unload")
+    @app.get("/unload")
     async def unload():
         return await c.unload()
 
@@ -261,6 +262,7 @@ def create_app() -> FastAPI:
         return await c.train(
             train_request.dataset.get(), train_request.args, train_request.detach
         )
+
     @app.post("/infer")
     async def infer(infer_request: InferRequest):
         return await c.infer(
@@ -268,7 +270,7 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/state/{n}")
-    async def state(n:int=1):
+    async def state(n: int = 1):
         return ProgressResponse(
             state=str(c.state),
             epoch_progress=c.epoch_progress,
@@ -284,11 +286,15 @@ def create_app() -> FastAPI:
     async def stop():
         c.interrupt = True
         return
-    @app.options("{path:path}")
-    async def options_handler(path: str):
-        return fastapi.responses.Response(
-            status_code=200
-        )
+
+    @app.options("/")
+    async def options_root_handler():
+        return fastapi.responses.Response(status_code=200)
+
+    @app.options("{path:path}", include_in_schema=False)
+    async def options_catchall_handler():
+        return fastapi.responses.Response(status_code=200)
+
     return app
 
 

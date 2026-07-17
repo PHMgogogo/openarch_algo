@@ -201,6 +201,20 @@ class ProcessManager:
         self.temp_template_manager = LazyTemporaryTemplateManager()
         self.load_instances_from_path()
 
+    async def restore_link_from_algorithms(self) -> None:
+        filenames = os.listdir(Config.algorithm_root_path)
+        for fn in filenames:
+            iij = os.path.join(
+                Config.algorithm_root_path, fn, Config.instance_info_path
+            )
+            if not os.path.exists(iij):
+                continue
+            it = Template.model_validate_json(open(iij, encoding="utf-8").read())
+            if it.id in self.instances:
+                continue
+            if it.volume:
+                await self.run(it, it.id)
+
     def load_instance_from_path(self, instance_name: str) -> None:
         if instance_name not in self.instances:
             instance_info_path = os.path.join(
@@ -224,9 +238,7 @@ class ProcessManager:
                     )
                     self.create_instance(instance_template, instance_name)
                 except Exception as e:
-                    print(
-                        f"Skip Loading {instance_name}: {type(e).__name__}: {e}"
-                    )
+                    print(f"Skip Loading {instance_name}: {type(e).__name__}: {e}")
 
     def load_instances_from_path(self) -> None:
         os.makedirs(Config.instance_root_path, exist_ok=True)
