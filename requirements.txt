@@ -19,3 +19,4 @@ pandas
 tqdm
 openai
 codex-relay
+statsmodels

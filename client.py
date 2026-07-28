@@ -696,6 +696,21 @@ class highlevel:
         )
 
     @staticmethod
+    def infer_text_csv(instance_id: str, text_csv: str, data_cols: list[str]) -> dict:
+        return auto(
+            requests.post(
+                f"{PROCESS_MANAGER_URL}/highlevel/{instance_id}/infer",
+                json={
+                    "dataset": {
+                        "content_type": "text_csv",
+                        "content": text_csv,
+                        "data_cols": data_cols,
+                    }
+                },
+            )
+        )
+
+    @staticmethod
     def train(
         instance_id: str,
         csv_path: str,

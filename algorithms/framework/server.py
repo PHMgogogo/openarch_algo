@@ -1,12 +1,20 @@
-try:
-    from . import base
-except ImportError:
-    import sys, os
+import os, sys
 
-    sys.path.append(os.path.dirname(__file__))
+if "BASE_PATH" in os.environ:
+    sys.path.append(os.environ["BASE_PATH"])
     import base
+else:
+    try:
+        from . import base
+    except ImportError:
+        import sys, os
+
+        sys.path.append(os.path.dirname(__file__))
+        import base
 import fastapi
+from contextlib import asynccontextmanager
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import torch
 import enum
 from torch import nn, optim
@@ -133,7 +141,11 @@ class Container:
         if detach:
             return []
         else:
-            return await self.task
+            try:
+                return await self.task
+            except asyncio.CancelledError:
+                self.interrupt = True
+                raise
 
     async def infer(
         self,
@@ -160,7 +172,11 @@ class Container:
         if detach:
             return []
         else:
-            return await self.task
+            try:
+                return await self.task
+            except asyncio.CancelledError:
+                self.interrupt = True
+                raise
 
     async def wait(self):
         if self.task is not None:
@@ -232,8 +248,18 @@ class ProgressResponse(BaseModel):
 
 
 def create_app() -> FastAPI:
-    app = fastapi.FastAPI()
     c = Container()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        yield
+        c.interrupt = True
+
+    app = fastapi.FastAPI(lifespan=lifespan)
+
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    if os.path.isdir(static_dir):
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
     @app.exception_handler(Exception)
     async def exception_handler(request: fastapi.Request, exc: Exception):

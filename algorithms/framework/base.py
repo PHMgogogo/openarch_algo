@@ -40,13 +40,15 @@ class TableByRowDataset(Dataset):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         row = self.df.iloc[idx]
         data = torch.tensor(
-            row[self.data_cols].values, dtype=torch.float32, device=device
+            row[self.data_cols].values.astype(float), dtype=torch.float32, device=device
         )
         if self.label_cols is None:
             label = data
         else:
             label = torch.tensor(
-                row[self.label_cols].values, dtype=torch.float32, device=device
+                row[self.label_cols].values.astype(float),
+                dtype=torch.float32,
+                device=device,
             )
         return data, label
 
@@ -162,6 +164,7 @@ def train_or_eval(
                 batch_data, batch_labels, batch_ids = item
                 ids_list.extend(batch_ids)
                 if interrupt_signal():
+                    result_callback(done=True)
                     return model_result
                 batch_callback(**batch_progress.format_dict)
                 batch_data = batch_data.to(device)

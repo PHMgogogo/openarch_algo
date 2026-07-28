@@ -1,12 +1,12 @@
 from __future__ import annotations
-import urllib.request
+import requests
 from typing import Any, TypeAlias, Literal, AsyncGenerator
 import os
 from dotenv import load_dotenv
 import openai
 import asyncio
 from rich.live import Live
-from rich.markdown import Markdown
+from rich.text import Text
 from fastapi import FastAPI
 from fastapi.responses import (
     StreamingResponse,
@@ -26,8 +26,9 @@ def dynamic_load_client(
     save_path: str = "./client.py",
 ):
     try:
-        response = urllib.request.urlopen(url)
-        script_content = response.read().decode("utf-8")
+        response = requests.get(url)
+        response.raise_for_status()
+        script_content = response.text
 
         with open(save_path, "w", encoding="utf-8") as f:
             f.write(script_content.replace("\r\n", "\n"))
@@ -95,6 +96,23 @@ Context: TypeAlias = list[
 
 class EzcliParams(BaseModel):
     args: str = "-h"
+
+
+def dump_to(context: Context, path: str = "dump.md"):
+    f = open(path, "w")
+
+    def tostr(obj):
+        if isinstance(obj, str):
+            return obj
+        elif isinstance(obj, list):
+            return "\n".join([tostr(item) for item in obj])
+        elif isinstance(obj, dict):
+            return "\n".join([k + ": " + tostr(v) for k, v in obj.items()])
+
+    for item in context:
+        f.write("---\n")
+        f.write(tostr(item))
+        f.write("\n")
 
 
 class Function(BaseModel):
@@ -214,7 +232,6 @@ def load_prompt_to(
 async def _ezcli_call(name: str, args: str) -> tuple[str, TextContent | ImageContent]:
     cat_content = None
     tool_output = ""
-    raw_cmd = f"{name} {args}"
     cmd = f"python client.py {args}"
     env = os.environ.copy()
     env.update({"PYTHONENCODING": "utf-8", "PYTHONUTF8": "1"})
@@ -227,7 +244,6 @@ async def _ezcli_call(name: str, args: str) -> tuple[str, TextContent | ImageCon
     )
     stdout_data, stderr_data = await proc.communicate()
     if proc.returncode == 0:
-        tool_output += f"\n```{raw_cmd}\n"
         if stdout_data is not None:
             stdout_str = stdout_data.decode("utf-8")
             is_cat = False
@@ -239,7 +255,6 @@ async def _ezcli_call(name: str, args: str) -> tuple[str, TextContent | ImageCon
                     data = out_obj["chunk_content"]
                     del out_obj["chunk_content"]
                     tool_output += json.dumps(out_obj)
-                    tool_output += "\n```\n"
                     if file_type == "image":
                         cat_content = image_content(data)
                     else:
@@ -248,26 +263,23 @@ async def _ezcli_call(name: str, args: str) -> tuple[str, TextContent | ImageCon
                 pass
             if not is_cat:
                 tool_output += stdout_str[-EXECUTE_OUTPUT_MAX_LEN:]
-        tool_output += "```\n"
     else:
-        tool_output += f"\n```{raw_cmd}\n"
         if stderr_data is not None:
             stderr_str = stderr_data.decode("utf-8")
             tool_output += stderr_str[-EXECUTE_OUTPUT_MAX_LEN:]
-        tool_output += "```\n"
     return tool_output, cat_content
 
 
 async def _single_progress(
     user_input: str, context: Context = None
 ) -> AsyncGenerator[tuple[str, str, Context], None]:
-    dump = True
     context = add_context_to(context, "user", [text_content(user_input)])
+    dump_to(context)
     yield None, None, context
-
     output_str: str = ""
     should_response_again: bool = True
     while should_response_again:
+        context_str: str = ""
         delta_str: str = ""
         should_response_again = False
         async for delta in llm_response(context):
@@ -279,64 +291,59 @@ async def _single_progress(
                 args = EzcliParams.model_validate(func.arguments).args
                 should_response_again = True
                 raw_cmd = func.name + " " + args
-                invoked_str = f"\n**已调用** `{raw_cmd}`\n\n"
-                delta_str = invoked_str
+                delta_str = f"\n**已调用** `{raw_cmd}`\n\n"
                 output_str += delta_str
-                add_context_to(context, "assistant", [text_content(output_str)])
-                yield None, None, context
-                output_str = ""
+                yield output_str, delta_str, context
+                add_context_to(context, "assistant", [text_content(context_str)])
                 tool_output, cat_content = await _ezcli_call(func.name, args)
                 add_f_context_to(
                     context, func.name, func.arguments, func.call_id, tool_output
                 )
+                yield None, None, context
                 if cat_content is not None:
                     add_context_to(
                         context,
                         "system",
-                        [text_content("你所查看的文件内容如下："), cat_content],
+                        [text_content("所查看的文件内容如下："), cat_content],
                     )
-                else:
-                    add_context_to(context, "system", [text_content("继续")])
             else:
                 delta_str = delta
+                context_str += delta_str
                 output_str += delta_str
                 yield output_str, delta_str, context
         if not should_response_again:
             context = add_context_to(context, "assistant", [text_content(output_str)])
             yield None, None, context
-    if dump:
-        with open("dump.md", "w", encoding="utf-8") as f:
-            for item in context:
-                if "role" in item:
-                    item: ContextItem
-                    f.write(f"# {item['role']}\n")
-                    for c in item["content"]:
-                        for k, v in c.items():
-                            f.write(f"## {k}\n")
-                            f.write(f"{v}\n")
-                        f.write("\n")
-                else:
-                    item: FunctionContextItem
-                    f.write(f"# {item['call_id']}\n")
-                    f.write(item["output"])
-                f.write("\n")
+        dump_to(context)
 
 
 async def single_progress(user_input: str, context: Context = None) -> None:
+    history = []
+    tail = []
+    TAIL_LINES = 20
     live = Live(refresh_per_second=20)
+
     with live:
         async for output, delta, context in _single_progress(
-            user_input=user_input, context=context
+            user_input=user_input,
+            context=context,
         ):
-            if output:
-                live.update(Markdown(output))
-            elif context[-1]["role"] in "assistant":
-                live.update("")
-                for item in context[-1]["content"]:
-                    live.console.print(Markdown(item["text"]))
+            if not output:
+                continue
 
-        # elif context[-1]["role"] == "assistant":
-        #     live.console.print(context[-1]["content"])
+            lines = output.splitlines()
+            if len(lines) > TAIL_LINES:
+                new_history = lines[:-TAIL_LINES]
+                if len(new_history) > len(history):
+                    for line in new_history[len(history) :]:
+                        live.console.print(line)
+
+                history = new_history
+                tail = lines[-TAIL_LINES:]
+            else:
+                tail = lines
+
+            live.update(Text("\n".join(tail)))
 
 
 def single_progress_headless(user_input: str, context: Context = None):

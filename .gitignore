@@ -6,6 +6,7 @@ algorithms/*
 !algorithms/framework/
 !algorithms/open_storage/
 !algorithms/r2c2r/
+!algorithms/analysis_*
 algorithms/open_storage/storage/*
 algorithms/ez_agent/.env
 algorithms/ez_agent/context.md

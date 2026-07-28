@@ -462,7 +462,125 @@
         .result-content.collapsed {
             max-height: 0 !important;
         }
+
+        .result-table-wrap {
+            overflow-x: auto;
+            margin-bottom: 10px;
+        }
+
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .result-table th,
+        .result-table td {
+            padding: 6px 10px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+            white-space: nowrap;
+        }
+
+        .result-table th {
+            background: #667eea;
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+
+        .result-table tr:hover {
+            background: #f0f4ff;
+        }
+
+        .result-loss {
+            font-weight: 600;
+            color: #e74c3c;
+            margin-bottom: 10px;
+        }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 8px 0;
+            font-size: 0.85em;
+        }
+
+        .pagination button {
+            padding: 4px 12px;
+            border: 1px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .pagination select {
+            padding: 4px 8px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        .pagination .page-info {
+            color: #666;
+            min-width: 120px;
+            text-align: center;
+        }
+
+        .result-summary {
+            color: #666;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+        }
+
+        .view-toggle {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .view-toggle button {
+            padding: 6px 16px;
+            border: 1px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        .view-toggle button.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .view-toggle button:hover:not(.active) {
+            background: #f0f4ff;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 400px;
+        }
     </style>
+    <script src="static/echarts.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -645,10 +763,21 @@
     <script>
         let trainCsvContent = '';
         let trainHeaders = [];
+        let trainCsvRows = [];
         let inferCsvContent = '';
         let inferHeaders = [];
+        let inferCsvRows = [];
         let statePolling = null;
-        const STATE_RESULT_LIMIT = 100;
+        let lastTaskType = '';  // 'train' or 'infer'
+        const STATE_RESULT_LIMIT = 1;
+        const PAGE_SIZE = 10;
+
+        // State change tracking for optimized rendering
+        let prevState = null;
+        let prevResultSnapshot = null;
+        let prevEpochProgress = null;
+        let prevBatchProgress = null;
+        let forceRender = false;
 
         window.onload = function() {
             refreshState();
@@ -710,11 +839,17 @@
         function parseCsv(content, prefix) {
             const lines = content.split('\n').filter(line => line.trim());
             const headers = lines[0].split(',').map(h => h.trim());
-            
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                rows.push(lines[i].split(',').map(c => c.trim()));
+            }
+
             if (prefix === 'train') {
                 trainHeaders = headers;
+                trainCsvRows = rows;
             } else {
                 inferHeaders = headers;
+                inferCsvRows = rows;
             }
 
             const previewContainer = document.getElementById(prefix + 'CsvPreview');
@@ -844,7 +979,7 @@
         async function unloadModel() {
             try {
                 addLog('info', '正在卸载模型...');
-                const response = await fetch(apiUrl('/unload'), { method: 'POST' });
+                const response = await fetch(apiUrl('/unload'), { method: 'GET' });
                 await handleApiResponse(response, '模型卸载成功');
                 refreshState();
             } catch (e) {
@@ -888,6 +1023,8 @@
 
             try {
                 addLog('info', '开始训练...');
+                lastTaskType = 'train';
+                clearStateCache();
                 const response = await fetch(apiUrl('/train'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -930,6 +1067,8 @@
 
             try {
                 addLog('info', '开始推理...');
+                lastTaskType = 'infer';
+                clearStateCache();
                 const response = await fetch(apiUrl('/infer'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -955,53 +1094,135 @@
             try {
                 const response = await fetch(apiUrl(`/state/${STATE_RESULT_LIMIT}`));
                 const data = await response.json();
-                
+
+                const stateChanged = prevState !== data.state;
+                const resultSnapshot = JSON.stringify(data.result);
+                const resultChanged = prevResultSnapshot !== resultSnapshot;
+                const epochSnapshot = JSON.stringify(data.epoch_progress);
+                const epochChanged = prevEpochProgress !== epochSnapshot;
+                const batchSnapshot = JSON.stringify(data.batch_progress);
+                const batchChanged = prevBatchProgress !== batchSnapshot;
+
                 const indicator = document.getElementById('statusIndicator');
                 const text = document.getElementById('statusText');
                 const stopBtn = document.getElementById('stopBtn');
                 const progressContainer = document.getElementById('progressContainer');
                 const resultContainer = document.getElementById('resultContainer');
                 const resultList = document.getElementById('resultList');
-                
-                text.textContent = data.state;
-                indicator.className = 'status-indicator ' + data.state.toLowerCase();
-                
+
+                // Status always updates (cheap)
+                if (stateChanged) {
+                    text.textContent = data.state;
+                    indicator.className = 'status-indicator ' + data.state.toLowerCase();
+                    prevState = data.state;
+                }
+
+                // Progress: only update DOM when changed
                 if (data.state === 'TRAINING' || data.state === 'INFERRING') {
                     stopBtn.disabled = false;
                     progressContainer.style.display = 'block';
-                    
-                    if (data.epoch_progress) {
+
+                    if (epochChanged && data.epoch_progress) {
                         const epochPercent = (data.epoch_progress.n / data.epoch_progress.total) * 100;
                         document.getElementById('epochProgress').style.width = epochPercent + '%';
                         document.getElementById('epochProgress').textContent = epochPercent.toFixed(1) + '%';
                         document.getElementById('epochInfo').textContent = `${data.epoch_progress.n}/${data.epoch_progress.total}`;
+                        prevEpochProgress = epochSnapshot;
                     }
-                    
-                    if (data.batch_progress) {
+
+                    if (batchChanged && data.batch_progress) {
                         document.getElementById('batchInfo').textContent = `${data.batch_progress.n}/${data.batch_progress.total}`;
+                        prevBatchProgress = batchSnapshot;
                     }
                 } else {
                     stopBtn.disabled = true;
-                    progressContainer.style.display = 'none';
+                    if (progressContainer.style.display !== 'none') {
+                        progressContainer.style.display = 'none';
+                        prevEpochProgress = null;
+                        prevBatchProgress = null;
+                    }
                 }
 
-                if (data.result && data.result.length > 0) {
-                    resultContainer.style.display = 'block';
-                    let resultHtml = '';
-                    data.result.forEach((result, index) => {
-                        resultHtml += `
-                            <div class="result-item">
-                                <div class="result-item-header" onclick="toggleResultItem(${index})">
-                                    <span>Epoch ${index + 1}</span>
-                                    <span class="toggle-icon">▼</span>
+                // Results: only rebuild HTML when data changed or forced
+                const shouldRenderResult = resultChanged || forceRender;
+                forceRender = false;
+
+                if (shouldRenderResult) {
+                    if (data.result && data.result.length > 0) {
+                        resultContainer.style.display = 'block';
+                        const headers = lastTaskType === 'infer' ? inferHeaders : trainHeaders;
+                        const rows = lastTaskType === 'infer' ? inferCsvRows : trainCsvRows;
+                        const dataCols = lastTaskType === 'infer'
+                            ? getSelectedCols('infer', 'data')
+                            : getSelectedCols('train', 'data');
+                        const labelCols = lastTaskType === 'infer'
+                            ? getSelectedCols('infer', 'label')
+                            : getSelectedCols('train', 'label');
+
+                        let resultHtml = '';
+                        data.result.forEach((result, index) => {
+                            const lossStr = result.loss != null ? `Loss: ${result.loss.toFixed(6)}` : '';
+                            const descStr = result.description || '';
+                            const headerInfo = [lossStr, descStr].filter(s => s).join(' | ');
+                            const pageKey = `result_${index}`;
+                            // Store chart data
+                            resultChartData[pageKey] = { result, rows, headers, dataCols, labelCols };
+                            resultHtml += `
+                                <div class="result-item">
+                                    <div class="result-item-header" onclick="toggleResultItem(${index})">
+                                        <span>Epoch ${index + 1}${headerInfo ? ' — ' + headerInfo : ''}</span>
+                                        <span class="toggle-icon">▼</span>
+                                    </div>
+                                    <div class="result-content" id="resultContent${index}">
+                                        ${renderResultTable(result, rows, headers, dataCols, labelCols, pageKey)}
+                                    </div>
                                 </div>
-                                <div class="result-content" id="resultContent${index}">${JSON.stringify(result, null, 2)}</div>
-                            </div>
-                        `;
-                    });
-                    resultList.innerHTML = resultHtml;
-                } else {
-                    resultContainer.style.display = 'none';
+                            `;
+                        });
+                        // 保存现有图表的 dataZoom 和 legend 选择状态，以便重建后恢复
+                        Object.keys(resultChartData).forEach(pageKey => {
+                            const container = document.getElementById('resultChartView_' + pageKey);
+                            if (container) {
+                                const chart = echarts.getInstanceByDom(container);
+                                if (chart) {
+                                    const opt = chart.getOption();
+                                    const seriesNames = (opt.series || []).map(s => s.name).join(',');
+                                    const xDataLen = (opt.xAxis && opt.xAxis[0] && opt.xAxis[0].data) ? opt.xAxis[0].data.length : 0;
+                                    preservedChartState[pageKey] = {
+                                        dataZoom: (opt.dataZoom || []).map(dz => ({ start: dz.start, end: dz.end })),
+                                        legend: (opt.legend || []).map(l => ({
+                                            selected: l.selected ? Object.assign({}, l.selected) : {}
+                                        })),
+                                        fingerprint: seriesNames + '|' + xDataLen
+                                    };
+                                }
+                            }
+                        });
+                        resultList.innerHTML = resultHtml;
+                        // Re-apply collapsed states after re-render
+                        data.result.forEach((_, index) => {
+                            if (resultItemCollapsed[index]) {
+                                const header = document.querySelectorAll('.result-item-header')[index];
+                                const content = document.getElementById(`resultContent${index}`);
+                                if (header) header.classList.add('collapsed');
+                                if (content) { content.classList.add('collapsed'); content.style.maxHeight = '0px'; }
+                            } else {
+                                const content = document.getElementById(`resultContent${index}`);
+                                if (content) { content.classList.remove('collapsed'); content.style.maxHeight = content.scrollHeight + 'px'; }
+                            }
+                        });
+                        // Render charts for items in chart view mode
+                        data.result.forEach((_, index) => {
+                            const pageKey = `result_${index}`;
+                            if (resultViewMode[pageKey] === 'chart') {
+                                renderResultChart(pageKey);
+                            }
+                        });
+                        prevResultSnapshot = resultSnapshot;
+                    } else {
+                        resultContainer.style.display = 'none';
+                        prevResultSnapshot = null;
+                    }
                 }
             } catch (e) {
                 console.error('刷新状态失败:', e);
@@ -1012,11 +1233,15 @@
             if (statePolling) {
                 clearInterval(statePolling);
             }
-            statePolling = setInterval(refreshState, 1000);
+            statePolling = setInterval(refreshState, 5000);
         }
 
         let resultListCollapsed = false;
         const resultItemCollapsed = {};
+        const resultPageState = {};  // { pageKey: { page, pageSize } }
+        const resultViewMode = {};   // { pageKey: 'table' | 'chart' }
+        const resultChartData = {};  // { pageKey: { result, csvRows, csvHeaders, dataCols, labelCols } }
+        const preservedChartState = {}; // { pageKey: { dataZoom, legend, fingerprint } } - 保留图表选择状态
 
         function toggleResultList() {
             const header = document.querySelector('.result-header');
@@ -1036,7 +1261,359 @@
             header.classList.toggle('collapsed', resultItemCollapsed[index]);
             content.classList.toggle('collapsed', resultItemCollapsed[index]);
             if (!resultItemCollapsed[index]) {
-                content.style.maxHeight = content.scrollHeight + 'px';
+                const pageKey = `result_${index}`;
+                if (resultViewMode[pageKey] === 'chart') {
+                    content.style.overflow = 'visible';
+                    content.style.maxHeight = 'none';
+                    setTimeout(() => {
+                        const container = document.getElementById('resultChartView_' + pageKey);
+                        if (container) {
+                            const chart = echarts.getInstanceByDom(container);
+                            if (chart) chart.resize();
+                        }
+                    }, 100);
+                } else {
+                    content.style.overflow = 'hidden';
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                }
+            }
+        }
+
+        function getPageState(pageKey) {
+            if (!resultPageState[pageKey]) {
+                resultPageState[pageKey] = { page: 0, pageSize: PAGE_SIZE };
+            }
+            return resultPageState[pageKey];
+        }
+
+        function renderResultTable(result, csvRows, csvHeaders, dataCols, labelCols, pageKey) {
+            if (!result.ids || result.ids.length === 0) {
+                // No ids — show summary only
+                return `<div class="result-loss">Loss: ${result.loss != null ? result.loss.toFixed(6) : 'N/A'}</div>
+                    <div class="result-summary">${result.description || ''}</div>`;
+            }
+
+            // Sort by row id
+            const sortedIdx = result.ids.map((id, i) => i).sort((a, b) => result.ids[a] - result.ids[b]);
+
+            const ps = getPageState(pageKey);
+            const totalRows = result.ids.length;
+            const totalPages = Math.ceil(totalRows / ps.pageSize);
+            if (ps.page >= totalPages) ps.page = Math.max(0, totalPages - 1);
+
+            const start = ps.page * ps.pageSize;
+            const end = Math.min(start + ps.pageSize, totalRows);
+
+            // Build column headers: index, data columns, prediction, label (if available)
+            let colHeaders = ['#'];
+            if (dataCols.length > 0) {
+                colHeaders = colHeaders.concat(dataCols);
+            } else {
+                colHeaders = colHeaders.concat(csvHeaders);
+            }
+            const outputCount = result.outputs && result.outputs[0] ? result.outputs[0].length : 1;
+            for (let o = 0; o < outputCount; o++) {
+                colHeaders.push(`预测_${o}`);
+            }
+            if (labelCols.length > 0) {
+                colHeaders = colHeaders.concat(labelCols.map(l => l + '_真实'));
+            }
+
+            let thead = '<thead><tr>';
+            colHeaders.forEach(h => { thead += `<th>${h}</th>`; });
+            thead += '</tr></thead>';
+
+            let tbody = '<tbody>';
+            for (let j = start; j < end; j++) {
+                const i = sortedIdx[j];
+                const rowId = result.ids[i];
+                tbody += '<tr>';
+                tbody += `<td>${rowId}</td>`;
+                // Data columns from CSV
+                if (csvRows[rowId] !== undefined) {
+                    if (dataCols.length > 0) {
+                        dataCols.forEach(dc => {
+                            const colIdx = csvHeaders.indexOf(dc);
+                            tbody += `<td>${colIdx >= 0 ? csvRows[rowId][colIdx] : ''}</td>`;
+                        });
+                    } else {
+                        csvRows[rowId].forEach(cell => { tbody += `<td>${cell}</td>`; });
+                    }
+                } else {
+                    const fillerCount = dataCols.length > 0 ? dataCols.length : csvHeaders.length;
+                    for (let c = 0; c < fillerCount; c++) tbody += '<td>-</td>';
+                }
+                // Predictions
+                if (result.outputs && result.outputs[i] !== undefined) {
+                    result.outputs[i].forEach(v => { tbody += `<td>${v.toFixed(6)}</td>`; });
+                } else {
+                    for (let o = 0; o < outputCount; o++) tbody += '<td>-</td>';
+                }
+                // Labels (actual values)
+                if (labelCols.length > 0 && csvRows[rowId] !== undefined) {
+                    labelCols.forEach(lc => {
+                        const colIdx = csvHeaders.indexOf(lc);
+                        tbody += `<td>${colIdx >= 0 ? csvRows[rowId][colIdx] : ''}</td>`;
+                    });
+                }
+                tbody += '</tr>';
+            }
+            tbody += '</tbody>';
+
+            const paginationHtml = renderPagination(pageKey, ps.page, totalPages, ps.pageSize, totalRows);
+
+            const lossStr = result.loss != null ? `<div class="result-loss">Loss: ${result.loss.toFixed(6)}</div>` : '';
+            const descStr = result.description ? `<div class="result-summary">${result.description}</div>` : '';
+            const currentView = resultViewMode[pageKey] || 'table';
+
+            return `
+                ${lossStr}
+                ${descStr}
+                <div class="view-toggle">
+                    <button class="${currentView === 'table' ? 'active' : ''}" onclick="switchResultView('${pageKey}', 'table')">📋 表格</button>
+                    <button class="${currentView === 'chart' ? 'active' : ''}" onclick="switchResultView('${pageKey}', 'chart')">📈 图表</button>
+                </div>
+                <div class="result-table-wrap" id="resultTableView_${pageKey}" style="display: ${currentView === 'table' ? 'block' : 'none'};">
+                    <table class="result-table">${thead}${tbody}</table>
+                </div>
+                <div class="chart-container" id="resultChartView_${pageKey}" style="display: ${currentView === 'chart' ? 'block' : 'none'};"></div>
+                <div id="resultPagination_${pageKey}" style="display: ${currentView === 'table' ? 'block' : 'none'};">${paginationHtml}</div>
+            `;
+        }
+
+        function renderPagination(pageKey, page, totalPages, pageSize, totalRows) {
+            const start = page * pageSize + 1;
+            const end = Math.min((page + 1) * pageSize, totalRows);
+            return `
+                <div class="pagination">
+                    <button onclick="changeResultPage('${pageKey}', 0)" ${page === 0 ? 'disabled' : ''}>&laquo; 首页</button>
+                    <button onclick="changeResultPage('${pageKey}', ${page - 1})" ${page === 0 ? 'disabled' : ''}>‹ 上一页</button>
+                    <span class="page-info">${start}-${end} / ${totalRows} 条</span>
+                    <button onclick="changeResultPage('${pageKey}', ${page + 1})" ${page >= totalPages - 1 ? 'disabled' : ''}>下一页 ›</button>
+                    <button onclick="changeResultPage('${pageKey}', ${totalPages - 1})" ${page >= totalPages - 1 ? 'disabled' : ''}>末页 &raquo;</button>
+                    <select onchange="changeResultPageSize('${pageKey}', this.value)">
+                        <option value="10" ${pageSize === 10 ? 'selected' : ''}>10条/页</option>
+                        <option value="25" ${pageSize === 25 ? 'selected' : ''}>25条/页</option>
+                        <option value="50" ${pageSize === 50 ? 'selected' : ''}>50条/页</option>
+                        <option value="100" ${pageSize === 100 ? 'selected' : ''}>100条/页</option>
+                    </select>
+                </div>
+            `;
+        }
+
+        function changeResultPage(pageKey, newPage) {
+            resultPageState[pageKey].page = newPage;
+            forceRender = true;
+            refreshState();
+        }
+
+        function changeResultPageSize(pageKey, newSize) {
+            resultPageState[pageKey].pageSize = parseInt(newSize);
+            resultPageState[pageKey].page = 0;
+            forceRender = true;
+            refreshState();
+        }
+
+        function clearStateCache() {
+            prevState = null;
+            prevResultSnapshot = null;
+            prevEpochProgress = null;
+            prevBatchProgress = null;
+            forceRender = false;
+            Object.keys(resultChartData).forEach(k => delete resultChartData[k]);
+            Object.keys(resultViewMode).forEach(k => delete resultViewMode[k]);
+            const container = document.getElementById('resultContainer');
+            if (container) container.style.display = 'none';
+            const list = document.getElementById('resultList');
+            if (list) list.innerHTML = '';
+            const progress = document.getElementById('progressContainer');
+            if (progress) progress.style.display = 'none';
+        }
+
+        function switchResultView(pageKey, mode) {
+            resultViewMode[pageKey] = mode;
+            const index = pageKey.split('_')[1];
+            const tableView = document.getElementById('resultTableView_' + pageKey);
+            const chartView = document.getElementById('resultChartView_' + pageKey);
+            const pagination = document.getElementById('resultPagination_' + pageKey);
+            const content = document.getElementById('resultContent' + index);
+            const buttons = document.querySelectorAll(`#resultContent${index} .view-toggle button`);
+
+            if (tableView) tableView.style.display = mode === 'table' ? 'block' : 'none';
+            if (chartView) chartView.style.display = mode === 'chart' ? 'block' : 'none';
+            if (pagination) pagination.style.display = mode === 'table' ? 'block' : 'none';
+
+            // Allow chart content to overflow so legend is visible
+            if (content && !resultItemCollapsed[index]) {
+                content.style.overflow = mode === 'chart' ? 'visible' : 'hidden';
+                if (mode === 'chart') {
+                    content.style.maxHeight = 'none';
+                } else {
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                }
+            }
+
+            buttons.forEach(btn => {
+                btn.classList.remove('active');
+                if ((mode === 'table' && btn.textContent.includes('表格')) ||
+                    (mode === 'chart' && btn.textContent.includes('图表'))) {
+                    btn.classList.add('active');
+                }
+            });
+
+            if (mode === 'chart') {
+                renderResultChart(pageKey);
+            }
+        }
+
+        function renderResultChart(pageKey) {
+            const data = resultChartData[pageKey];
+            if (!data) return;
+
+            const { result, rows: csvRows, headers: csvHeaders, dataCols, labelCols } = data;
+            const container = document.getElementById('resultChartView_' + pageKey);
+            if (!container || result.ids.length === 0) return;
+
+            const N = result.ids.length;
+            const MAX_POINTS = 1000;
+
+            // Sort by row id
+            const sortedIdx = result.ids.map((id, i) => i).sort((a, b) => result.ids[a] - result.ids[b]);
+
+            // Build raw data arrays
+            let xRaw = [];
+            for (let i = 0; i < N; i++) xRaw.push(i);
+
+            // Build all series raw data
+            let seriesRaw = [];  // { name, data[], style }
+
+            // Data columns (feature columns)
+            if (dataCols && dataCols.length > 0) {
+                for (const dc of dataCols) {
+                    const colIdx = csvHeaders.indexOf(dc);
+                    if (colIdx < 0) continue;
+                    const sData = [];
+                    for (let j = 0; j < N; j++) {
+                        const i = sortedIdx[j];
+                        const rowId = result.ids[i];
+                        if (csvRows[rowId] !== undefined) {
+                            const val = parseFloat(csvRows[rowId][colIdx]);
+                            sData.push(isNaN(val) ? null : val);
+                        } else {
+                            sData.push(null);
+                        }
+                    }
+                    seriesRaw.push({ name: dc, data: sData, style: {} });
+                }
+            }
+
+            // Prediction series
+            const outputCount = result.outputs && result.outputs[0] ? result.outputs[0].length : 0;
+            for (let o = 0; o < outputCount; o++) {
+                const sData = [];
+                for (let j = 0; j < N; j++) {
+                    const i = sortedIdx[j];
+                    if (result.outputs && result.outputs[i] !== undefined) {
+                        sData.push(result.outputs[i][o]);
+                    } else {
+                        sData.push(null);
+                    }
+                }
+                seriesRaw.push({ name: '预测_' + o, data: sData, style: { lineStyle: { width: 3 } } });
+            }
+
+            // Label series (actual values)
+            if (labelCols && labelCols.length > 0) {
+                for (const lc of labelCols) {
+                    const colIdx = csvHeaders.indexOf(lc);
+                    if (colIdx < 0) continue;
+                    const sData = [];
+                    for (let j = 0; j < N; j++) {
+                        const i = sortedIdx[j];
+                        const rowId = result.ids[i];
+                        if (csvRows[rowId] !== undefined) {
+                            const val = parseFloat(csvRows[rowId][colIdx]);
+                            sData.push(isNaN(val) ? null : val);
+                        } else {
+                            sData.push(null);
+                        }
+                    }
+                    seriesRaw.push({ name: lc + '_真实', data: sData, style: { lineStyle: { type: 'dashed', width: 2 } } });
+                }
+            }
+
+            // Downsample if too many points
+            let xData = xRaw;
+            let seriesList;
+            if (N > MAX_POINTS) {
+                const step = N / MAX_POINTS;
+                const sampledIdx = [];
+                for (let i = 0; i < N; i += step) {
+                    sampledIdx.push(Math.floor(i));
+                }
+                // Ensure last point is included
+                if (sampledIdx[sampledIdx.length - 1] !== N - 1) {
+                    sampledIdx.push(N - 1);
+                }
+                xData = sampledIdx.map(i => xRaw[i]);
+                seriesList = seriesRaw.map(sr => ({
+                    name: sr.name,
+                    type: 'line',
+                    data: sampledIdx.map(i => sr.data[i]),
+                    smooth: false,
+                    symbol: 'none',
+                    ...sr.style
+                }));
+            } else {
+                seriesList = seriesRaw.map(sr => ({
+                    name: sr.name,
+                    type: 'line',
+                    data: sr.data,
+                    smooth: false,
+                    symbol: 'none',
+                    ...sr.style
+                }));
+            }
+
+            // Initialize chart
+            let chart = echarts.getInstanceByDom(container);
+            if (chart) chart.dispose();
+            chart = echarts.init(container);
+
+            chart.setOption({
+                tooltip: { trigger: 'axis' },
+                legend: {
+                    type: 'scroll',
+                    data: seriesList.map(s => s.name),
+                    bottom: 35
+                },
+                dataZoom: [
+                    { type: 'slider', start: 0, end: 100 },
+                    { type: 'inside' }
+                ],
+                grid: { left: '3%', right: '4%', top: '3%', bottom: '18%', containLabel: true },
+                xAxis: {
+                    type: 'category',
+                    data: xData,
+                    name: '行号',
+                    axisLabel: { fontSize: 10 }
+                },
+                yAxis: { type: 'value' },
+                series: seriesList
+            });
+
+            // Ensure chart resizes correctly after DOM display change
+            setTimeout(() => chart.resize(), 50);
+
+            // 如果数据列和数据长度没有变化，恢复用户之前的选择状态（dataZoom 范围和 legend 列可见性）
+            const preserved = preservedChartState[pageKey];
+            if (preserved) {
+                const currentFingerprint = seriesList.map(s => s.name).join(',') + '|' + xData.length;
+                if (preserved.fingerprint === currentFingerprint) {
+                    chart.setOption({ dataZoom: preserved.dataZoom }, { merge: true });
+                    chart.setOption({ legend: preserved.legend }, { merge: true });
+                }
+                delete preservedChartState[pageKey];
             }
         }
 
