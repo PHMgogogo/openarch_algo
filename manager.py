@@ -379,6 +379,7 @@ class ProcessManager:
         for iid in keys:
             if iid in self.processes:
                 if "0" not in self.processes[iid]:
+                    self.instances[iid].stop_time = datetime.now()
                     if self.instances[iid].restart_check():
                         await self.exec(iid)
                     continue

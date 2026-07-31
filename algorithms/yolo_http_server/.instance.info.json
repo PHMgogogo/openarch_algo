@@ -5,7 +5,7 @@
         "description": "YOLO HTTP SERVER"
     },
     "entry": "uvicorn main:app --host 0.0.0.0 --port 8003 --root-path /yolo",
-    "restart_always": true,
+    "restart_always": false,
     "id": "yolo_http_server",
     "is_temporary": false,
     "restart_interval_seconds": 10.0,

@@ -337,13 +337,14 @@ class Instance:
         self.template = template.model_copy()
         self.log = Log(id=self.id)
         self.start_time = None
+        self.stop_time = None
 
     def restart_check(self) -> bool:
         if not self.template.restart_always:
             return False
         if self.start_time is None:
             return True
-        if datetime.now() - self.start_time > timedelta(
+        if datetime.now() - self.stop_time > timedelta(
             seconds=self.template.restart_interval_seconds
         ):
             return True

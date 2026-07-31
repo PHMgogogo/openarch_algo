@@ -85,24 +85,6 @@
         "cors": false
     },
     {
-        "name": "data",
-        "order": -1,
-        "rule_type": "REGEX",
-        "pattern": "/api(\\/(aircraft|csv))(\\/.*)?",
-        "dest_index": [
-            0,
-            2
-        ],
-        "dest_format": "%s%s",
-        "rewrite_host": "172.21.56.51:8080",
-        "editable": true,
-        "timeout": null,
-        "enable": true,
-        "file_serve_root_path": null,
-        "default_entrance": "/api/aircraft/models",
-        "cors": false
-    },
-    {
         "name": "data-swagger",
         "order": -1,
         "rule_type": "REGEX",
@@ -174,41 +156,6 @@
         "cors": false
     },
     {
-        "name": "task",
-        "order": -1,
-        "rule_type": "PREFIX",
-        "pattern": "/api/tasks",
-        "dest_index": [
-            0,
-            1
-        ],
-        "dest_format": "%s%s",
-        "rewrite_host": "127.0.0.1:8007",
-        "editable": true,
-        "timeout": null,
-        "enable": true,
-        "file_serve_root_path": null,
-        "default_entrance": "/api/tasks/",
-        "cors": false
-    },
-    {
-        "name": "opencode",
-        "order": -1,
-        "rule_type": "PREFIX",
-        "pattern": "/opencode",
-        "dest_index": [
-            1
-        ],
-        "dest_format": "%s",
-        "rewrite_host": "127.0.0.1:4096",
-        "editable": true,
-        "timeout": null,
-        "enable": true,
-        "file_serve_root_path": null,
-        "default_entrance": "/opencode/global/health",
-        "cors": false
-    },
-    {
         "name": "ezagent",
         "order": -1,
         "rule_type": "PREFIX",
@@ -240,6 +187,59 @@
         "enable": true,
         "file_serve_root_path": null,
         "default_entrance": "/r2c2r/v1/models",
+        "cors": false
+    },
+    {
+        "name": "data",
+        "order": -1,
+        "rule_type": "REGEX",
+        "pattern": "/api(\\/(aircraft|csv))(\\/.*)?",
+        "dest_index": [
+            0,
+            2
+        ],
+        "dest_format": "%s%s",
+        "rewrite_host": "127.0.0.1:8080",
+        "editable": true,
+        "timeout": null,
+        "enable": true,
+        "file_serve_root_path": null,
+        "default_entrance": "/api/aircraft/models",
+        "cors": false
+    },
+    {
+        "name": "task",
+        "order": -1,
+        "rule_type": "PREFIX",
+        "pattern": "/api/tasks",
+        "dest_index": [
+            0,
+            1
+        ],
+        "dest_format": "%s%s",
+        "rewrite_host": "127.0.0.1:8009",
+        "editable": true,
+        "timeout": null,
+        "enable": true,
+        "file_serve_root_path": null,
+        "default_entrance": "/api/tasks/",
+        "cors": false
+    },
+    {
+        "name": "opencode",
+        "order": -1,
+        "rule_type": "PREFIX",
+        "pattern": "/opencode",
+        "dest_index": [
+            1
+        ],
+        "dest_format": "%s",
+        "rewrite_host": "127.0.0.1:4096",
+        "editable": true,
+        "timeout": null,
+        "enable": true,
+        "file_serve_root_path": null,
+        "default_entrance": "/opencode/global/health",
         "cors": false
     }
 ]
