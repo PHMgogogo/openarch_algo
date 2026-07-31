@@ -379,7 +379,6 @@ class ProcessManager:
         for iid in keys:
             if iid in self.processes:
                 if "0" not in self.processes[iid]:
-                    self.instances[iid].stop_time = datetime.now()
                     if self.instances[iid].restart_check():
                         await self.exec(iid)
                     continue
@@ -400,6 +399,7 @@ class ProcessManager:
                     del self.processes[iid]["0"]
                     del self.iowrappers[iid]["0"]
                     self.instances[iid].status = InstanceStatus.EXITED
+                    self.instances[iid].stop_time = datetime.now()
                 await self.instances[iid].log.flush_all()
 
     async def write_to_proc(self, instance_id: str, data: bytes, flush: bool = True):
