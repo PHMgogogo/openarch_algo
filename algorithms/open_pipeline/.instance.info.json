@@ -1,0 +1,52 @@
+{
+    "algorithm": {
+        "id": "open_pipeline",
+        "version": "",
+        "description": ""
+    },
+    "entry": "uvicorn asgi:app --root-path=/api/pipelines --port=8008 --host 0.0.0.0",
+    "restart_always": true,
+    "id": "open_pipeline",
+    "is_temporary": false,
+    "restart_interval_seconds": 10.0,
+    "volume": true,
+    "bind_listener": false,
+    "rules": [
+        {
+            "name": "pipeline",
+            "order": -1,
+            "rule_type": "PREFIX",
+            "pattern": "/api/pipelines",
+            "dest_index": [
+                0,
+                1
+            ],
+            "dest_format": "%s%s",
+            "rewrite_host": "127.0.0.1:8008",
+            "editable": true,
+            "timeout": null,
+            "enable": true,
+            "file_serve_root_path": null,
+            "default_entrance": "/api/pipelines",
+            "cors": false
+        },
+        {
+            "name": "pipeline_web",
+            "order": -1,
+            "rule_type": "PREFIX",
+            "pattern": "/pipelines",
+            "dest_index": [
+                1
+            ],
+            "dest_format": "%s",
+            "rewrite_host": null,
+            "editable": true,
+            "timeout": null,
+            "enable": true,
+            "file_serve_root_path": "../open_pipeline/frontend/dist/",
+            "default_entrance": "/pipelines/index.html",
+            "cors": false
+        }
+    ],
+    "tags": []
+}

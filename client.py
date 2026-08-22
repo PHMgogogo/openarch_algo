@@ -583,6 +583,7 @@ class analysis:
             message: str = "",
             raw_data: str = "",
             time: str = None,
+            level: int = 1,
         ):
             if time is None:
                 time = datetime.now()
@@ -597,6 +598,7 @@ class analysis:
                             "message": message,
                             "raw_data": raw_data,
                             "time": time,
+                            "level": level,
                         }
                     ],
                 )
@@ -604,7 +606,14 @@ class analysis:
 
         @staticmethod
         def adds(alarms: list[dict]):
+            for item in alarms:
+                range = [item["range_from"], item["range_to"]]
+                del item["range_from"], item["range_to"]
+                item["range"] = range
+                if "time" not in item or item["time"] is None:
+                    item["time"] = str(datetime.now())
             return auto(requests.post(f"{ANALYSIS_MANAGER_URL}/alarms", json=alarms))
+
 
 class highlevel:
     """High-level shortcut operations built on top of the framework algorithm

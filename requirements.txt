@@ -22,3 +22,5 @@ codex-relay
 statsmodels
 jinja2
 jsonpatch
+openai-agents
+croniter
