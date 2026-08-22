@@ -299,6 +299,7 @@ class AlarmIfNumberStateKNode(Node):
         comparison: Literal["eq", "lt", "gt", "le", "ge"] = "eq"
         condition: Literal["any", "all"] = "any"
         jinja_prompt: str = "Alarm: {{ state }}"
+        level: int = 1
 
     parameters: Parameters = Parameters()
 
@@ -333,6 +334,7 @@ class AlarmIfNumberStateKNode(Node):
                     cols=self.read_data,
                     range=(0, max_len),
                     message=message,
+                    level=self.parameters.level,
                 )
             )
         return [], True
@@ -951,6 +953,7 @@ class AlarmItem(BaseModel):
     cols: list[str]
     range: tuple[int, int]
     message: str
+    level: int
 
 
 class Alarm:

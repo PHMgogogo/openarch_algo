@@ -56,6 +56,7 @@ export const zhCN: Record<string, string> = {
   'No performance data': '无性能数据',
   'Alarm': '告警',
   'No alarm': '无告警',
+  'Level': '级别',
   'Cols': '数据列',
   'Range': '行范围',
   'Message': '消息',

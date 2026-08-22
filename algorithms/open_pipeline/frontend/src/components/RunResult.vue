@@ -17,7 +17,7 @@ export interface RunResultData {
   performance: { node: string; title: string; start_time: number; end_time: number; interval: number }[]
   data: Record<string, any[]>
   state: Record<string, any>
-  alarm?: { cols: string[]; range: [number, number]; message: string }[]
+  alarm?: { cols: string[]; range: [number, number]; message: string; level: number }[]
 }
 
 export interface RunErrorData {
@@ -184,6 +184,7 @@ const markdownHTML = computed(() => {
       <el-tab-pane :label="_('Alarm')" name="alarm">
         <el-table v-if="runResult.alarm?.length" :data="runResult.alarm" size="small" border stripe style="width: 100%">
           <el-table-column prop="cols" :label="_('Cols')" />
+          <el-table-column prop="level" :label="_('Level')" width="80" />
           <el-table-column prop="range" :label="_('Range')"
             :formatter="(r: any) => Array.isArray(r.range) ? r.range.join(' - ') : r.range" />
           <el-table-column prop="message" :label="_('Message')" show-overflow-tooltip />
