@@ -26,7 +26,7 @@
             "timeout": null,
             "enable": true,
             "file_serve_root_path": null,
-            "default_entrance": "/api/pipelines",
+            "default_entrance": "/api/pipelines/docs",
             "cors": false
         },
         {
