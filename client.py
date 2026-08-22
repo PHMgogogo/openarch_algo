@@ -752,6 +752,37 @@ class highlevel:
             )
         )
 
+    @staticmethod
+    def train_text_csv(
+        instance_id: str,
+        text_csv: str,
+        data_cols: list[str],
+        label_cols: list[str],
+        epoch: int = 1,
+        learning_rate: float = 1e-3,
+        device: str = "cpu",
+        batch_size: int = 1,
+    ) -> dict:
+        return auto(
+            requests.post(
+                f"{PROCESS_MANAGER_URL}/highlevel/{instance_id}/train",
+                json={
+                    "dataset": {
+                        "content_type": "text_csv",
+                        "content": text_csv,
+                        "data_cols": data_cols,
+                        "label_cols": label_cols,
+                    },
+                    "args": {
+                        "epoch": epoch,
+                        "learning_rate": learning_rate,
+                        "batch_size": batch_size,
+                        "device": device,
+                    },
+                },
+            )
+        )
+
 
 def _parse_docstring(docstring: str) -> tuple[str, dict[str, str]]:
     if not docstring:

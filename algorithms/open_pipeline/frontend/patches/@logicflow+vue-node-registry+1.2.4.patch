@@ -1,0 +1,32 @@
+diff --git a/node_modules/@logicflow/vue-node-registry/es/view.js b/node_modules/@logicflow/vue-node-registry/es/view.js
+index b0c7980..8eea904 100644
+--- a/node_modules/@logicflow/vue-node-registry/es/view.js
++++ b/node_modules/@logicflow/vue-node-registry/es/view.js
+@@ -33,8 +33,9 @@ var VueNodeView = /** @class */ (function (_super) {
+                     return;
+                 var target = root.firstElementChild || root;
+                 var rect = target.getBoundingClientRect();
+-                var width = round(rect.width);
+-                var height = round(rect.height);
++                var scale = _this.props.graphModel.transformModel.SCALE_X;
++                var width = round(rect.width / scale);
++                var height = round(rect.height / scale);
+                 if (width <= 0 || height <= 0)
+                     return;
+                 if (width === _this.__lastWidth && height === _this.__lastHeight)
+diff --git a/node_modules/@logicflow/vue-node-registry/lib/view.js b/node_modules/@logicflow/vue-node-registry/lib/view.js
+index 7fadacf..8e89865 100644
+--- a/node_modules/@logicflow/vue-node-registry/lib/view.js
++++ b/node_modules/@logicflow/vue-node-registry/lib/view.js
+@@ -36,8 +36,9 @@ var VueNodeView = /** @class */ (function (_super) {
+                     return;
+                 var target = root.firstElementChild || root;
+                 var rect = target.getBoundingClientRect();
+-                var width = (0, lodash_es_1.round)(rect.width);
+-                var height = (0, lodash_es_1.round)(rect.height);
++                var scale = _this.props.graphModel.transformModel.SCALE_X;
++                var width = (0, lodash_es_1.round)(rect.width / scale);
++                var height = (0, lodash_es_1.round)(rect.height / scale);
+                 if (width <= 0 || height <= 0)
+                     return;
+                 if (width === _this.__lastWidth && height === _this.__lastHeight)

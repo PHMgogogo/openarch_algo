@@ -1,0 +1,112 @@
+{
+  "name": "",
+  "cron_expr": "",
+  "cron_enable": false,
+  "id": "llm",
+  "nodes": {
+    "6b42135b-96a9-439d-8615-afe97fbe4ac5": {
+      "id": "6b42135b-96a9-439d-8615-afe97fbe4ac5",
+      "node_type": "WriteStateKNode",
+      "title": "iam",
+      "next": [
+        "b463d2ee-8b97-4aca-afef-82542d0b08f7"
+      ],
+      "prev": [],
+      "x": 0.0,
+      "y": 0.0,
+      "order": 0,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [
+        "who"
+      ],
+      "parameters": {
+        "value": "孙中杰"
+      },
+      "category": "STATE"
+    },
+    "b4f7b8a2-f767-4080-9d52-b21ec2caf8db": {
+      "id": "b4f7b8a2-f767-4080-9d52-b21ec2caf8db",
+      "node_type": "TextCsvInputNode",
+      "title": "data",
+      "next": [
+        "b463d2ee-8b97-4aca-afef-82542d0b08f7"
+      ],
+      "prev": [],
+      "x": 0.0,
+      "y": 100.0,
+      "order": 0,
+      "read_data": [],
+      "write_data": [
+        "x",
+        "y"
+      ],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "text_csv": "x,y\n1,3\n2,6\n3,7\n4,9\n",
+        "with_header": true,
+        "overwrite_header": false
+      },
+      "category": "INPUT"
+    },
+    "b463d2ee-8b97-4aca-afef-82542d0b08f7": {
+      "id": "b463d2ee-8b97-4aca-afef-82542d0b08f7",
+      "node_type": "LLMNode",
+      "title": "llm",
+      "next": [
+        "bb53a388-e68d-40d1-884f-cc5c34444e35"
+      ],
+      "prev": [
+        "6b42135b-96a9-439d-8615-afe97fbe4ac5",
+        "b4f7b8a2-f767-4080-9d52-b21ec2caf8db"
+      ],
+      "x": 300.0,
+      "y": 0.0,
+      "order": 1,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [
+        "output"
+      ],
+      "parameters": {
+        "response_api": true,
+        "openai_api_key": "sk-43bfffbda4a047efa6c7b8f72aacbd29",
+        "openai_base_url": "https://api.deepseek.com/v1",
+        "openai_model_name": "deepseek-v4-flash",
+        "return_json": false,
+        "jinja_prompt": "我是{{state.who}}，跟我打招呼，然后告诉我，你如何看待以下两列数据的关系？\n{{data.x}}\n{{data.y}}",
+        "reasoning": true,
+        "reasoning_state": "thinking"
+      },
+      "category": "REMOTE"
+    },
+    "bb53a388-e68d-40d1-884f-cc5c34444e35": {
+      "id": "bb53a388-e68d-40d1-884f-cc5c34444e35",
+      "node_type": "StateOutputNode",
+      "title": "output",
+      "next": [],
+      "prev": [
+        "b463d2ee-8b97-4aca-afef-82542d0b08f7"
+      ],
+      "x": 600.0,
+      "y": 0.0,
+      "order": 2,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [
+        "thinking",
+        "output"
+      ],
+      "write_state": [],
+      "parameters": {
+        "prefix": ""
+      },
+      "category": "OUTPUT"
+    }
+  },
+  "return_data": [],
+  "return_state": []
+}

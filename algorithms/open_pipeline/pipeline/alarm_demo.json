@@ -1,0 +1,225 @@
+{
+  "name": "Alarm & Regression Demo",
+  "cron_expr": "",
+  "cron_enable": false,
+  "id": "alarm_demo",
+  "nodes": {
+    "raw": {
+      "id": "raw",
+      "node_type": "TextCsvInputNode",
+      "title": null,
+      "next": ["ols", "pearson", "deming"],
+      "prev": [],
+      "x": 0.0,
+      "y": 0.0,
+      "order": 0,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "text_csv": "x,y\n1,3\n2,5\n3,7\n4,9\n",
+        "with_header": true,
+        "overwrite_header": false
+      },
+      "category": "INPUT"
+    },
+    "pred": {
+      "id": "pred",
+      "node_type": "TextCsvInputNode",
+      "title": null,
+      "next": ["kx"],
+      "prev": [],
+      "x": 0.0,
+      "y": 100.0,
+      "order": 0,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "text_csv": "pred_x\n5\n6\n7\n8\n",
+        "with_header": true,
+        "overwrite_header": false
+      },
+      "category": "INPUT"
+    },
+    "ols": {
+      "id": "ols",
+      "node_type": "OLSRegressionNode",
+      "title": null,
+      "next": ["kx", "k_b"],
+      "prev": ["raw"],
+      "x": 300.0,
+      "y": 0.0,
+      "order": 1,
+      "read_data": ["x", "y"],
+      "write_data": [],
+      "read_state": [],
+      "write_state": ["k", "b"],
+      "parameters": {},
+      "category": "REGRESSION"
+    },
+    "deming": {
+      "id": "deming",
+      "node_type": "DemingRegressionNode",
+      "title": null,
+      "next": ["dk_b"],
+      "prev": ["raw"],
+      "x": 300.0,
+      "y": 100.0,
+      "order": 1,
+      "read_data": ["x", "y"],
+      "write_data": [],
+      "read_state": [],
+      "write_state": ["dk", "db"],
+      "parameters": {
+        "lambda": 2
+      },
+      "category": "REGRESSION"
+    },
+    "pearson": {
+      "id": "pearson",
+      "node_type": "PearsonNode",
+      "title": null,
+      "next": ["rho_out", "alarm"],
+      "prev": ["raw"],
+      "x": 300.0,
+      "y": 200.0,
+      "order": 1,
+      "read_data": ["x", "y"],
+      "write_data": [],
+      "read_state": [],
+      "write_state": ["rho"],
+      "parameters": {},
+      "category": "BY_COLUMN"
+    },
+    "kx": {
+      "id": "kx",
+      "node_type": "MultiplyStateKNode",
+      "title": null,
+      "next": ["kx_b"],
+      "prev": ["pred", "ols"],
+      "x": 600.0,
+      "y": 0.0,
+      "order": 2,
+      "read_data": ["pred_x"],
+      "write_data": ["pred_y"],
+      "read_state": ["k"],
+      "write_state": [],
+      "parameters": {},
+      "category": "BY_ROW"
+    },
+    "kx_b": {
+      "id": "kx_b",
+      "node_type": "AddStateKNode",
+      "title": null,
+      "next": ["kx_b_out"],
+      "prev": ["kx"],
+      "x": 900.0,
+      "y": 0.0,
+      "order": 3,
+      "read_data": ["pred_y"],
+      "write_data": ["pred_y"],
+      "read_state": ["b"],
+      "write_state": [],
+      "parameters": {},
+      "category": "BY_ROW"
+    },
+    "kx_b_out": {
+      "id": "kx_b_out",
+      "node_type": "DataOutputNode",
+      "title": null,
+      "next": [],
+      "prev": ["kx_b"],
+      "x": 1200.0,
+      "y": 0.0,
+      "order": 4,
+      "read_data": ["pred_y"],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "prefix": "Data Output: "
+      },
+      "category": "OUTPUT"
+    },
+    "k_b": {
+      "id": "k_b",
+      "node_type": "StateOutputNode",
+      "title": null,
+      "next": [],
+      "prev": ["ols"],
+      "x": 600.0,
+      "y": 100.0,
+      "order": 2,
+      "read_data": [],
+      "write_data": [],
+      "read_state": ["k", "b"],
+      "write_state": [],
+      "parameters": {
+        "prefix": "State Output: "
+      },
+      "category": "OUTPUT"
+    },
+    "rho_out": {
+      "id": "rho_out",
+      "node_type": "StateOutputNode",
+      "title": null,
+      "next": [],
+      "prev": ["pearson"],
+      "x": 600.0,
+      "y": 200.0,
+      "order": 2,
+      "read_data": [],
+      "write_data": [],
+      "read_state": ["rho"],
+      "write_state": [],
+      "parameters": {
+        "prefix": "State Output: "
+      },
+      "category": "OUTPUT"
+    },
+    "dk_b": {
+      "id": "dk_b",
+      "node_type": "StateOutputNode",
+      "title": null,
+      "next": [],
+      "prev": ["deming"],
+      "x": 600.0,
+      "y": 300.0,
+      "order": 2,
+      "read_data": [],
+      "write_data": [],
+      "read_state": ["dk", "db"],
+      "write_state": [],
+      "parameters": {
+        "prefix": "State Output: "
+      },
+      "category": "OUTPUT"
+    },
+    "alarm": {
+      "id": "alarm",
+      "node_type": "AlarmIfNumberStateKNode",
+      "title": null,
+      "next": [],
+      "prev": ["pearson"],
+      "x": 600.0,
+      "y": 400.0,
+      "order": 2,
+      "read_data": ["x"],
+      "write_data": [],
+      "read_state": ["rho"],
+      "write_state": ["alarm_flag"],
+      "parameters": {
+        "threshold": 0.95,
+        "comparison": "gt",
+        "condition": "any",
+        "jinja_prompt": "Rho {{ state.rho }} exceeds threshold 0.95"
+      },
+      "category": "ALARM"
+    }
+  },
+  "return_data": ["pred_y"],
+  "return_state": ["k", "b", "rho", "dk", "db", "alarm_flag"]
+}

@@ -1,0 +1,80 @@
+{
+  "name": "",
+  "id": "inference",
+  "nodes": {
+    "d4faa646-8790-4b21-b67e-2362ee3460a9": {
+      "id": "d4faa646-8790-4b21-b67e-2362ee3460a9",
+      "node_type": "TextCsvInputNode",
+      "title": "input",
+      "next": [
+        "0ca76977-c758-4138-899e-a8acd954d2c7"
+      ],
+      "prev": [],
+      "x": -300.0,
+      "y": 0.0,
+      "order": -1,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "text_csv": "x,y\n1,2\n3,4\n5,6\n7,8\n9,10",
+        "with_header": true,
+        "overwrite_header": false
+      },
+      "category": "INPUT"
+    },
+    "0ca76977-c758-4138-899e-a8acd954d2c7": {
+      "id": "0ca76977-c758-4138-899e-a8acd954d2c7",
+      "node_type": "InferenceNode",
+      "title": "inference",
+      "next": [
+        "47bc03cf-1d05-4de3-8015-21948267f18e"
+      ],
+      "prev": [
+        "d4faa646-8790-4b21-b67e-2362ee3460a9"
+      ],
+      "x": 0.0,
+      "y": 0.0,
+      "order": 0,
+      "read_data": [
+        "x"
+      ],
+      "write_data": [
+        "x_pred"
+      ],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "instance": "1ac4d2ea-558a-43de-b8cc-dd6d46037b80"
+      },
+      "category": "REMOTE"
+    },
+    "47bc03cf-1d05-4de3-8015-21948267f18e": {
+      "id": "47bc03cf-1d05-4de3-8015-21948267f18e",
+      "node_type": "DataOutputNode",
+      "title": "output",
+      "next": [],
+      "prev": [
+        "0ca76977-c758-4138-899e-a8acd954d2c7"
+      ],
+      "x": 300.0,
+      "y": 0.0,
+      "order": 1,
+      "read_data": [
+        "x",
+        "y",
+        "x_pred"
+      ],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "prefix": "Data Output: "
+      },
+      "category": "OUTPUT"
+    }
+  },
+  "return_data": [],
+  "return_state": []
+}

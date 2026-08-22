@@ -224,7 +224,7 @@ class Template(BaseModel):
     volume: bool = False
     bind_listener: bool = False
     rules: list[UrlProxyRule] = []
-
+    tags: list[str] = []
     @property
     def path(self) -> str:
         if self.is_temporary:

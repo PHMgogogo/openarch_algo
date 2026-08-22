@@ -1,0 +1,121 @@
+{
+  "name": "",
+  "id": "train",
+  "nodes": {
+    "ae1196dc-0b98-4f85-971e-833462f9af94": {
+      "id": "ae1196dc-0b98-4f85-971e-833462f9af94",
+      "node_type": "TextCsvInputNode",
+      "title": "input",
+      "next": [
+        "86895618-9e4c-460b-9391-d1b8ab17f2c7",
+        "c8a10793-bc6d-4aa7-af44-372d25fe29cf"
+      ],
+      "prev": [],
+      "x": -300.0,
+      "y": 0.0,
+      "order": 0,
+      "read_data": [],
+      "write_data": [
+        "x",
+        "y"
+      ],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "text_csv": "x,y\n1,3\n2,6\n3,7\n4,9\n",
+        "with_header": true,
+        "overwrite_header": true
+      },
+      "category": "INPUT"
+    },
+    "c8a10793-bc6d-4aa7-af44-372d25fe29cf": {
+      "id": "c8a10793-bc6d-4aa7-af44-372d25fe29cf",
+      "node_type": "DataOutputNode",
+      "title": "data_output",
+      "next": [],
+      "prev": [
+        "ae1196dc-0b98-4f85-971e-833462f9af94",
+        "86895618-9e4c-460b-9391-d1b8ab17f2c7"
+      ],
+      "x": 229.0,
+      "y": -201.0,
+      "order": 2,
+      "read_data": [
+        "pred_y",
+        "x",
+        "y"
+      ],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "prefix": "Data Output: "
+      },
+      "category": "OUTPUT"
+    },
+    "86895618-9e4c-460b-9391-d1b8ab17f2c7": {
+      "id": "86895618-9e4c-460b-9391-d1b8ab17f2c7",
+      "node_type": "TrainNode",
+      "title": "train",
+      "next": [
+        "d6101a1f-e476-4c35-b44f-7bdc5dcb2e5d",
+        "c8a10793-bc6d-4aa7-af44-372d25fe29cf"
+      ],
+      "prev": [
+        "ae1196dc-0b98-4f85-971e-833462f9af94"
+      ],
+      "x": 0.0,
+      "y": 100.0,
+      "order": 1,
+      "read_data": [
+        "x",
+        "y"
+      ],
+      "write_data": [
+        "pred_y"
+      ],
+      "read_state": [],
+      "write_state": [
+        "loss"
+      ],
+      "parameters": {
+        "instance": "1ac4d2ea-558a-43de-b8cc-dd6d46037b80",
+        "epoch": 1,
+        "learning_rate": 0.001,
+        "batch_size": 1,
+        "device": "cpu",
+        "data_cols": [
+          "x"
+        ],
+        "label_cols": [
+          "y"
+        ]
+      },
+      "category": "REMOTE"
+    },
+    "d6101a1f-e476-4c35-b44f-7bdc5dcb2e5d": {
+      "id": "d6101a1f-e476-4c35-b44f-7bdc5dcb2e5d",
+      "node_type": "StateOutputNode",
+      "title": "state_output",
+      "next": [],
+      "prev": [
+        "86895618-9e4c-460b-9391-d1b8ab17f2c7"
+      ],
+      "x": 300.0,
+      "y": 0.0,
+      "order": 2,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [
+        "loss"
+      ],
+      "write_state": [],
+      "parameters": {
+        "prefix": "State Output: "
+      },
+      "category": "OUTPUT"
+    }
+  },
+  "return_data": [],
+  "return_state": []
+}

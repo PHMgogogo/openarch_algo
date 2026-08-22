@@ -1,0 +1,110 @@
+{
+  "name": "",
+  "id": "scc",
+  "nodes": {
+    "e8b621de-d74a-4fea-a9c3-eee1bc0d2104": {
+      "id": "e8b621de-d74a-4fea-a9c3-eee1bc0d2104",
+      "node_type": "TextCsvInputNode",
+      "title": "data",
+      "next": [
+        "4455fbb1-3b7f-4288-9eba-f460c6d0abc8",
+        "d6cbe17c-2ee4-419a-8c19-6eaf41ae6141",
+        "bdaa13dd-694a-4acb-ac8b-0c863fd7cbba"
+      ],
+      "prev": [],
+      "x": -107.390625,
+      "y": -186.0,
+      "order": -1,
+      "read_data": [],
+      "write_data": [
+        "data"
+      ],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "text_csv": "x\n2\n1\n2\n1\n2\n1\n2\n2\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n10\n10000",
+        "with_header": true,
+        "overwrite_header": true
+      },
+      "category": "INPUT"
+    },
+    "4455fbb1-3b7f-4288-9eba-f460c6d0abc8": {
+      "id": "4455fbb1-3b7f-4288-9eba-f460c6d0abc8",
+      "node_type": "StdNode",
+      "title": "std",
+      "next": [
+        "bdaa13dd-694a-4acb-ac8b-0c863fd7cbba"
+      ],
+      "prev": [
+        "e8b621de-d74a-4fea-a9c3-eee1bc0d2104"
+      ],
+      "x": 216.609375,
+      "y": -255.0,
+      "order": 0,
+      "read_data": [
+        "data"
+      ],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [
+        "sigma"
+      ],
+      "parameters": {},
+      "category": "BY_COLUMN"
+    },
+    "d6cbe17c-2ee4-419a-8c19-6eaf41ae6141": {
+      "id": "d6cbe17c-2ee4-419a-8c19-6eaf41ae6141",
+      "node_type": "ColumnMeanNode",
+      "title": "mean",
+      "next": [
+        "bdaa13dd-694a-4acb-ac8b-0c863fd7cbba"
+      ],
+      "prev": [
+        "e8b621de-d74a-4fea-a9c3-eee1bc0d2104"
+      ],
+      "x": 206.609375,
+      "y": -91.0,
+      "order": 0,
+      "read_data": [
+        "data"
+      ],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [
+        "mu"
+      ],
+      "parameters": {},
+      "category": "BY_COLUMN"
+    },
+    "bdaa13dd-694a-4acb-ac8b-0c863fd7cbba": {
+      "id": "bdaa13dd-694a-4acb-ac8b-0c863fd7cbba",
+      "node_type": "ShewharNode",
+      "title": "scc",
+      "next": [],
+      "prev": [
+        "4455fbb1-3b7f-4288-9eba-f460c6d0abc8",
+        "d6cbe17c-2ee4-419a-8c19-6eaf41ae6141",
+        "e8b621de-d74a-4fea-a9c3-eee1bc0d2104"
+      ],
+      "x": 548.609375,
+      "y": -188.0,
+      "order": 1,
+      "read_data": [
+        "data"
+      ],
+      "write_data": [
+        "scc"
+      ],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "mu_key": "mu",
+        "sigma_key": "sigma",
+        "ratio": 3.0
+      },
+      "category": "BY_ROW"
+    }
+  },
+  "return_data": [],
+  "return_state": []
+}

@@ -20,3 +20,5 @@ tqdm
 openai
 codex-relay
 statsmodels
+jinja2
+jsonpatch

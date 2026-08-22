@@ -1,0 +1,252 @@
+{
+  "name": "",
+  "cron_expr": "",
+  "cron_enable": false,
+  "id": "deming",
+  "nodes": {
+    "raw": {
+      "id": "raw",
+      "node_type": "TextCsvInputNode",
+      "title": null,
+      "next": [
+        "deming",
+        "pearson"
+      ],
+      "prev": [],
+      "x": 0.0,
+      "y": 0.0,
+      "order": 0,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "text_csv": "x,y\n1,3\n2,6\n3,7\n4,9\n",
+        "with_header": true,
+        "overwrite_header": false
+      },
+      "category": "INPUT"
+    },
+    "pred": {
+      "id": "pred",
+      "node_type": "TextCsvInputNode",
+      "title": null,
+      "next": [
+        "kx"
+      ],
+      "prev": [],
+      "x": 0.0,
+      "y": 100.0,
+      "order": 0,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "text_csv": "pred_x\n5\n6\n7\n8\n",
+        "with_header": true,
+        "overwrite_header": false
+      },
+      "category": "INPUT"
+    },
+    "deming": {
+      "id": "deming",
+      "node_type": "DemingRegressionNode",
+      "title": null,
+      "next": [
+        "k_b",
+        "kx"
+      ],
+      "prev": [
+        "raw"
+      ],
+      "x": 300.0,
+      "y": 0.0,
+      "order": 1,
+      "read_data": [
+        "x",
+        "y"
+      ],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [
+        "k",
+        "b"
+      ],
+      "parameters": {
+        "lambda_": 1.0
+      },
+      "category": "REGRESSION"
+    },
+    "pearson": {
+      "id": "pearson",
+      "node_type": "PearsonNode",
+      "title": null,
+      "next": [
+        "rho"
+      ],
+      "prev": [
+        "raw"
+      ],
+      "x": 300.0,
+      "y": 100.0,
+      "order": 1,
+      "read_data": [
+        "x",
+        "y"
+      ],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [
+        "rho"
+      ],
+      "parameters": {},
+      "category": "BY_COLUMN"
+    },
+    "k_b": {
+      "id": "k_b",
+      "node_type": "StateOutputNode",
+      "title": null,
+      "next": [],
+      "prev": [
+        "deming"
+      ],
+      "x": 600.0,
+      "y": 0.0,
+      "order": 2,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [
+        "k",
+        "b"
+      ],
+      "write_state": [],
+      "parameters": {
+        "prefix": "State Output: "
+      },
+      "category": "OUTPUT"
+    },
+    "kx": {
+      "id": "kx",
+      "node_type": "MultiplyStateKNode",
+      "title": null,
+      "next": [
+        "kx_out",
+        "kx_b"
+      ],
+      "prev": [
+        "pred",
+        "deming"
+      ],
+      "x": 600.0,
+      "y": 100.0,
+      "order": 2,
+      "read_data": [
+        "pred_x"
+      ],
+      "write_data": [
+        "pred_y"
+      ],
+      "read_state": [
+        "k"
+      ],
+      "write_state": [],
+      "parameters": {},
+      "category": "BY_ROW"
+    },
+    "rho": {
+      "id": "rho",
+      "node_type": "StateOutputNode",
+      "title": null,
+      "next": [],
+      "prev": [
+        "pearson"
+      ],
+      "x": 600.0,
+      "y": 200.0,
+      "order": 2,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [
+        "rho"
+      ],
+      "write_state": [],
+      "parameters": {
+        "prefix": "State Output: "
+      },
+      "category": "OUTPUT"
+    },
+    "kx_out": {
+      "id": "kx_out",
+      "node_type": "DataOutputNode",
+      "title": null,
+      "next": [],
+      "prev": [
+        "kx"
+      ],
+      "x": 900.0,
+      "y": 0.0,
+      "order": 3,
+      "read_data": [
+        "pred_y"
+      ],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "prefix": "Data Output: "
+      },
+      "category": "OUTPUT"
+    },
+    "kx_b": {
+      "id": "kx_b",
+      "node_type": "AddStateKNode",
+      "title": null,
+      "next": [
+        "kx_b_out"
+      ],
+      "prev": [
+        "kx"
+      ],
+      "x": 900.0,
+      "y": 100.0,
+      "order": 3,
+      "read_data": [
+        "pred_y"
+      ],
+      "write_data": [
+        "pred_y"
+      ],
+      "read_state": [
+        "b"
+      ],
+      "write_state": [],
+      "parameters": {},
+      "category": "BY_ROW"
+    },
+    "kx_b_out": {
+      "id": "kx_b_out",
+      "node_type": "DataOutputNode",
+      "title": null,
+      "next": [],
+      "prev": [
+        "kx_b"
+      ],
+      "x": 1200.0,
+      "y": 0.0,
+      "order": 4,
+      "read_data": [
+        "pred_y"
+      ],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "prefix": "Data Output: "
+      },
+      "category": "OUTPUT"
+    }
+  },
+  "return_data": [],
+  "return_state": []
+}

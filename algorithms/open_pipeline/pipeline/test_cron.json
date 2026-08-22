@@ -1,0 +1,58 @@
+{
+  "name": "test cron",
+  "cron_expr": "0 5 * * 1",
+  "cron_enable": true,
+  "id": "test_cron",
+  "nodes": {
+    "raw": {
+      "id": "raw",
+      "node_type": "TextCsvInputNode",
+      "title": null,
+      "next": [
+        "out"
+      ],
+      "prev": [],
+      "x": 0.0,
+      "y": 0.0,
+      "order": 0,
+      "read_data": [],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "text_csv": "x,y\n1,2\n3,4\n5,6\n",
+        "with_header": true,
+        "overwrite_header": false
+      },
+      "category": "INPUT"
+    },
+    "out": {
+      "id": "out",
+      "node_type": "DataOutputNode",
+      "title": null,
+      "next": [],
+      "prev": [
+        "raw"
+      ],
+      "x": 300.0,
+      "y": 0.0,
+      "order": 1,
+      "read_data": [
+        "x",
+        "y"
+      ],
+      "write_data": [],
+      "read_state": [],
+      "write_state": [],
+      "parameters": {
+        "prefix": "Data Output: "
+      },
+      "category": "OUTPUT"
+    }
+  },
+  "return_data": [
+    "x",
+    "y"
+  ],
+  "return_state": []
+}
