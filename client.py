@@ -591,22 +591,45 @@ class highlevel:
         )
 
     @staticmethod
-    def create() -> dict:
-        """Create and start a new temporary framework instance
+    def create(
+        algo: Literal[
+            "framework",
+            "analysis_dl_afd",
+            "analysis_dl_fp",
+            "analysis_dl_he",
+            "analysis_dl_ta",
+            "analysis_ml_afd",
+            "analysis_ml_fp",
+            "analysis_ml_he",
+            "analysis_ml_ta",
+            "analysis_stat_afd",
+            "analysis_stat_fp",
+            "analysis_stat_he",
+            "analysis_stat_ta",
+        ] = "framework",
+    ) -> dict:
+        """Create and start a new temporary algorithm instance
 
         Spawns an instance from the built-in `framework` template with an
-        auto-generated UUID, registers a dedicated proxy rule that routes
-        ``/{uuid}`` traffic to the instance, and returns the created instance
-        metadata.
+        auto-generated UUID, binds it to the given algorithm (`algo`), and
+        registers a dedicated proxy rule that routes ``/{uuid}`` traffic to
+        the instance, returning the created instance metadata.
         If there is no clear specification of what algorithm or instance to create,
         then this feature should be used to create the default algorithm.
         The model will auto load (without weights) after create.
+
+        Args:
+            algo: Algorithm id the instance runs; defaults to "framework".
 
         Returns:
             dict: Information about the newly created instance, including its
             generated id used for subsequent load/infer/restart/delete calls.
         """
-        return auto(requests.get(f"{PROCESS_MANAGER_URL}/highlevel"))
+        return auto(
+            requests.get(
+                f"{PROCESS_MANAGER_URL}/highlevel", params={"algo": algo}
+            )
+        )
 
     @staticmethod
     def delete(instance_id_or_prefix: str) -> dict:

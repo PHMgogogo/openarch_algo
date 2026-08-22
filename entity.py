@@ -223,8 +223,8 @@ class Template(BaseModel):
     restart_interval_seconds: float = 10
     volume: bool = False
     bind_listener: bool = False
-    rules: list[UrlProxyRule] = []
-    tags: list[str] = []
+    rules: list[UrlProxyRule] = Field(default_factory=list)
+    tags: set[str] = Field(default_factory=set)
     @property
     def path(self) -> str:
         if self.is_temporary:

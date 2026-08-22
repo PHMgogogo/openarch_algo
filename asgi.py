@@ -253,11 +253,35 @@ async def delete_instance(instance_id: str, force: bool = True):
 
 
 @app.get("/highlevel")
-async def highlevel_create():
+async def highlevel_create(
+    algo: Literal[
+        "framework",
+        "analysis_dl_afd",
+        "analysis_dl_fp",
+        "analysis_dl_he",
+        "analysis_dl_ta",
+        "analysis_ml_afd",
+        "analysis_ml_fp",
+        "analysis_ml_he",
+        "analysis_ml_ta",
+        "analysis_stat_afd",
+        "analysis_stat_fp",
+        "analysis_stat_he",
+        "analysis_stat_ta",
+    ] = "framework",
+):
     uid = str(uuid.uuid4())
+    algo_detail = await get_algorithm_detail(algo)
+    algo_info = Algorithm(
+        id=algo_detail.id,
+        version=algo_detail.version,
+        description=algo_detail.description,
+    )
     template = await get_template_detail("framework")
+    template.algorithm = algo_info
     template.is_temporary = True
     template.id = uid
+    template.tags.append("highlevel")
     if template.rules is None:
         template.rules = []
     template.rules.append(
@@ -270,7 +294,7 @@ async def highlevel_create():
             dest_format="/%s",
             rewrite_host="127.0.0.1:0",
             default_entrance=f"/{uid}/?prefix={uid}",
-            cors=True
+            cors=True,
         )
     )
     entry = template.entry + f" --root-path /{uid}"
@@ -358,6 +382,7 @@ async def highlevel_state(instance_id_or_prefix: str):
     ) as r:
         return await r.json()
 
+
 async def attach_ws_recv_loop(instance_id: str, websocket: WebSocket):
     while True:
         data = await websocket.receive_bytes()
@@ -384,9 +409,12 @@ async def attach_instance(instance_id: str, iowrapper_id: str, websocket: WebSoc
     )
     return
 
+
 @app.get("/rlfa")
 async def rlfa():
     return await pm.restore_link_from_algorithms()
+
+
 @app.get("/console")
 async def get_console():
     return FileResponse("console.html")
