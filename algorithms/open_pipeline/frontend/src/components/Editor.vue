@@ -95,7 +95,7 @@
             </el-select>
         </el-form-item>
         <template v-if="nodeSchema" v-for="key in Object.keys(nodeSchema.$defs.Parameters.properties)" :key="key">
-            <el-form-item v-if="['InferenceNode', 'TrainNode'].includes(formData.node_type) && key == 'instance'"
+            <el-form-item v-if="['InferenceNode', 'TrainNode', 'SendAlarmNode'].includes(formData.node_type) && key == 'instance'"
                 :label="_(nodeSchema.$defs.Parameters.properties[key].title)">
                 <el-select v-model="formData.parameters[key]"
                     :placeholder="nodeSchema.$defs.Parameters.properties[key].default">
@@ -103,7 +103,7 @@
                         :value="instance.id" />
                 </el-select>
             </el-form-item>
-            <el-form-item v-if="key == 'jinja_prompt'"
+            <el-form-item v-else-if="key == 'jinja_prompt'"
                 :label="_(nodeSchema.$defs.Parameters.properties[key].title)">
                 <div class="jinja-editor">
                     <div class="jinja-toolbar">
@@ -295,7 +295,7 @@ const instances = ref<any[]>()
 async function updateNode(data: NodeData | null) {
     if (data) {
         await getSchema(data.node_type)
-        if (["InferenceNode", "TrainNode"].includes(data.node_type)) {
+        if (["InferenceNode", "TrainNode", "SendAlarmNode"].includes(data.node_type)) {
             instances.value = await getInstances()
         }
         // 为新节点填充 schema 中定义的参数默认值

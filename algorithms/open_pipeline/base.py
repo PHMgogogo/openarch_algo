@@ -17,6 +17,7 @@ import json
 import jinja2
 import openai
 import os
+from datetime import datetime
 
 dotenv.load_dotenv()
 Tensor_N: typing.TypeAlias = torch.Tensor
@@ -288,6 +289,40 @@ class MultiplyStateKNode(Node):
         ], True
 
 
+class SendAlarmNode(Node):
+    read_data: list[str] = Field(default_factory=list, max_length=0)
+    write_data: list[str] = Field(default_factory=list, max_length=0)
+    read_state: list[str] = Field(default_factory=list, max_length=0)
+    write_state: list[str] = Field(default_factory=list, max_length=0)
+    category: str = "ALARM"
+
+    class Parameters(BaseModel):
+        instance: str = ""
+        raw_data: str = "data"
+
+    parameters: Parameters = Parameters()
+
+    def process(
+        self, read_data: list[Tensor_N], context: Context
+    ) -> tuple[list[Tensor_N], bool]:
+        alarms = []
+        for alarm_item in context.alarm.values:
+            alarms.append(
+                {
+                    "instance_id": self.parameters.instance,
+                    "range_from": alarm_item.range[0],
+                    "range_to": alarm_item.range[1],
+                    "cols": alarm_item.cols,
+                    "message": alarm_item.message,
+                    "raw_data": self.parameters.raw_data,
+                    "time": str(datetime.now()),
+                    "level": alarm_item.level,
+                }
+            )
+        client.analysis.alarm.adds(alarms)
+        return [], True
+
+
 class AlarmIfNumberStateKNode(Node):
     read_data: list[str] = Field(default_factory=list, min_length=1)
     read_state: list[str] = Field(default_factory=list, min_length=1)
@@ -316,18 +351,18 @@ class AlarmIfNumberStateKNode(Node):
         }
         values = context.state.get(self.read_state)
         results = [bool(ops[self.parameters.comparison](v)) for v in values]
-        triggered = (
-            any(results) if self.parameters.condition == "any" else all(results)
-        )
+        triggered = any(results) if self.parameters.condition == "any" else all(results)
         context.state.set(self.write_state, triggered)
         if triggered:
             data_ctx: dict[str, typing.Any] = {}
             for k, v in context.data.values.items():
                 data_ctx[k] = v.tolist() if isinstance(v, torch.Tensor) else v
             state_ctx: dict[str, typing.Any] = dict(context.state.values)
-            message = jinja2.Environment().from_string(
-                self.parameters.jinja_prompt
-            ).render(data=data_ctx, state=state_ctx)
+            message = (
+                jinja2.Environment()
+                .from_string(self.parameters.jinja_prompt)
+                .render(data=data_ctx, state=state_ctx)
+            )
             max_len = max(len(col) for col in read_data)
             context.alarm.add(
                 AlarmItem(

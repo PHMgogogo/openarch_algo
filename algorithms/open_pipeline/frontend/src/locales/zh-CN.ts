@@ -89,6 +89,7 @@ export const zhCN: Record<string, string> = {
   'LLMNode': '大模型调用',
   'RoundNode': '舍入',
   'AlarmIfNumberStateKNode': '数值状态告警',
+  'SendAlarmNode': '发送告警',
 
   // Category
   'INPUT': '输入',
@@ -121,6 +122,7 @@ export const zhCN: Record<string, string> = {
   'Sigma Key': '标准差的状态值名称',
   'Ratio': '比例',
   'Instance': '实例',
+  'Raw Data': '原始数据',
   'Epoch': '训练轮数',
   'Learning Rate': '学习率',
   'Batch Size': '批次大小',
