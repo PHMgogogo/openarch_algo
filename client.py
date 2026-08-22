@@ -6,10 +6,14 @@ import json
 import sys
 from typing import Literal, get_type_hints, Any
 import os
+from datetime import datetime
 
 PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8001/api/pmgr")
 SERVICE_MANAGER_URL = os.getenv("SERVICE_MANAGER_URL", "http://127.0.0.1:8001/smgr")
 SERVICE_ROOT_URL = os.getenv("SERVICE_ROOT_URL", "http://127.0.0.1:8001")
+ANALYSIS_MANAGER_URL = os.getenv(
+    "ANALYSIS_MANAGER_URL", "http://127.0.0.1:8001/api/analysis"
+)
 
 
 def auto(response: requests.Response):
@@ -568,6 +572,40 @@ class service:
         )
 
 
+class analysis:
+    class alarm:
+        @staticmethod
+        def add(
+            instance_id: str,
+            range_from: int = 0,
+            range_to: int = 0,
+            cols: list[str] = [],
+            message: str = "",
+            raw_data: str = "",
+            time: str = None,
+        ):
+            if time is None:
+                time = datetime.now()
+            return auto(
+                requests.post(
+                    f"{ANALYSIS_MANAGER_URL}/alarms",
+                    json=[
+                        {
+                            "instance_id": instance_id,
+                            "cols": cols,
+                            "range": [range_from, range_to],
+                            "message": message,
+                            "raw_data": raw_data,
+                            "time": time,
+                        }
+                    ],
+                )
+            )
+
+        @staticmethod
+        def adds(alarms: list[dict]):
+            return auto(requests.post(f"{ANALYSIS_MANAGER_URL}/alarms", json=alarms))
+
 class highlevel:
     """High-level shortcut operations built on top of the framework algorithm
 
@@ -626,9 +664,7 @@ class highlevel:
             generated id used for subsequent load/infer/restart/delete calls.
         """
         return auto(
-            requests.get(
-                f"{PROCESS_MANAGER_URL}/highlevel", params={"algo": algo}
-            )
+            requests.get(f"{PROCESS_MANAGER_URL}/highlevel", params={"algo": algo})
         )
 
     @staticmethod
@@ -913,6 +949,8 @@ def _build_parser_recursive(
                     }
                     if not is_required:
                         arg_kwargs["required"] = False
+                    else:
+                        arg_kwargs["required"] = True
                     parser_cmd.add_argument(f"--{param}", **arg_kwargs)
                 elif (
                     hasattr(param_type, "__origin__") and param_type.__origin__ is list
@@ -924,6 +962,8 @@ def _build_parser_recursive(
                     }
                     if not is_required:
                         arg_kwargs["required"] = False
+                    else:
+                        arg_kwargs["required"] = True
                     parser_cmd.add_argument(f"--{param}", **arg_kwargs)
                 elif param_type == io.BufferedReader:
                     parser_cmd.add_argument(
