@@ -32,11 +32,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 // ---- 流水线 ----
 
 export function getPipelineList() {
-  return request<{ data: string[] }>('')
+  return request<{ data: string[] }>('/pipeline')
 }
 
 export function createPipeline(id: string) {
-  return request<unknown>('', {
+  return request<unknown>('/pipeline', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id }),
@@ -52,15 +52,15 @@ export function renamePipeline(oldId: string, newId: string) {
 }
 
 export function deletePipeline(id: string) {
-  return request<unknown>(`/${id}`, { method: 'DELETE' })
+  return request<unknown>(`/pipeline/${id}`, { method: 'DELETE' })
 }
 
 export function getPipeline<T = any>(id: string) {
-  return request<T>(`/${id}`)
+  return request<T>(`/pipeline/${id}`)
 }
 
 export function savePipeline(pipeline: any) {
-  return request<unknown>(`/${pipeline.id}`, {
+  return request<unknown>(`/pipeline/${pipeline.id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(pipeline),

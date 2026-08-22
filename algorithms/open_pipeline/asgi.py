@@ -54,12 +54,11 @@ app = FastAPI(lifespan=lifespan)
 _frontend_dir = os.path.join(_current_dir, "frontend", "dist")
 
 
-@app.get("/api/pipelines")
+@app.get("/api/pipelines/pipeline")
 async def list_pipelines():
     return {"data": pm.list_pipeline()}
 
-
-@app.get("/api/pipelines/{pipeline_id}")
+@app.get("/api/pipelines/pipeline/{pipeline_id}")
 async def get_pipeline(pipeline_id: str):
     try:
         pipeline = pm.get_pipeline(pipeline_id)
@@ -68,13 +67,13 @@ async def get_pipeline(pipeline_id: str):
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
 
-@app.post("/api/pipelines")
+@app.post("/api/pipelines/pipeline")
 async def create_pipeline(pipeline: Pipeline):
     pm.save_pipeline(pipeline)
     return {"id": pipeline.id}
 
 
-@app.put("/api/pipelines/{pipeline_id}")
+@app.put("/api/pipelines/pipeline/{pipeline_id}")
 async def update_pipeline(pipeline_id: str, pipeline: Pipeline):
     if pipeline.id != pipeline_id:
         raise HTTPException(status_code=400, detail="Pipeline ID mismatch")
@@ -82,7 +81,7 @@ async def update_pipeline(pipeline_id: str, pipeline: Pipeline):
     return {"id": pipeline.id}
 
 
-@app.delete("/api/pipelines/{pipeline_id}")
+@app.delete("/api/pipelines/pipeline/{pipeline_id}")
 async def delete_pipeline(pipeline_id: str):
     try:
         pm.del_pipeline(pipeline_id)
