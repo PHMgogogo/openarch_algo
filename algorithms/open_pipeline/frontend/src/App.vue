@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, toRaw, provide } from 'vue'
+import { defineAsyncComponent, onMounted, ref, toRaw, provide } from 'vue'
 import MarkdownIt from 'markdown-it'
 import texmath from 'markdown-it-texmath'
 import katex from 'katex'
@@ -14,8 +14,9 @@ import { NODE_WIDTH } from "./components/Node.vue"
 import type { PipelineData } from './components/PipelineData.ts';
 import Editor from './components/Editor.vue';
 import RunResult from './components/RunResult.vue';
-import JsonEditor from './components/JsonEditor.vue';
-import PipelineChat from './components/PipelineChat.vue';
+// jsoneditor / katex / markdown-it 只用于 JSON 视图，懒加载避免首屏下载
+const JsonEditor = defineAsyncComponent(() => import('./components/JsonEditor.vue'))
+const PipelineChat = defineAsyncComponent(() => import('./components/PipelineChat.vue'))
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { _ } from './i18n'
 import { getPipelineList, createPipeline, renamePipeline, deletePipeline, getPipeline, savePipeline, runPipeline, getNodeHelp } from './requests'

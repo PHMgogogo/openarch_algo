@@ -33,5 +33,20 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          // 按库分包，缩小入口 index.js，并利用浏览器缓存（rolldown 只支持函数形式）
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined
+            if (id.includes('element-plus')) return 'element-plus'
+            if (id.includes('logicflow')) return 'logicflow'
+            if (id.includes('jsoneditor')) return 'jsoneditor'
+            if (id.includes('katex') || id.includes('markdown-it')) return 'katex-md'
+            return 'vendor'
+          },
+        },
+      },
+    },
   }
 })

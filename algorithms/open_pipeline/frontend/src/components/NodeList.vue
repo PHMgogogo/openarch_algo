@@ -52,8 +52,22 @@ onMounted(async () => {
     activeCategories.value = groupedNodeTypes.value.map(g => g.category)
 })
 
+// crypto.randomUUID is only available in secure contexts (HTTPS/localhost).
+// Fall back to a manual UUID v4 for production over plain HTTP.
+function genUUID(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID()
+    }
+    const chars = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+    return chars.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0
+        const v = c === 'x' ? r : (r & 0x3) | 0x8
+        return v.toString(16)
+    })
+}
+
 function onDragStart(item: NodeType) {
-    const uuid = crypto.randomUUID()
+    const uuid = genUUID()
     props.canvasRef?.startDrag({
         id: uuid,
         type: 'node',
