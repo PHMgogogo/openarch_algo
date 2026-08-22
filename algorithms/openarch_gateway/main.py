@@ -114,8 +114,9 @@ class ServiceManager:
     def match(self, path: str) -> tuple[UrlProxyRule | None, str, list[str]]:
         for rule in self._sorted_rules:
             dest = rule.dest(path)
-            if dest:
-                return rule, dest, rule.match(path)[1]
+            if dest is None:
+                continue
+            return rule, dest, rule.match(path)[1]
         return None, "", []
 
     def list(self) -> list[UrlProxyRule]:

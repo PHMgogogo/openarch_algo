@@ -44,13 +44,12 @@ class UrlProxyRule(BaseModel):
         if self.dest_format is None and self.rule_type == RuleType.REGEX:
             self.dest_format = "%s"
 
-    def dest(self, path: str) -> str:
+    def dest(self, path: str) -> str | None:
         result, groups = self.match(path)
         if not result:
-            return ""
-        else:
-            tuples = tuple(groups[idx] for idx in self.dest_index)
-            return self.dest_format % tuples
+            return None
+        tuples = tuple(groups[idx] for idx in self.dest_index)
+        return self.dest_format % tuples
 
     def host(self, raw_host: str) -> str:
         if self.rewrite_host is None:

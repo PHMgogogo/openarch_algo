@@ -54,11 +54,11 @@ app = FastAPI(lifespan=lifespan)
 _frontend_dir = os.path.join(_current_dir, "frontend", "dist")
 
 
-@app.get("/api/pipelines/pipeline")
+@app.get("/pipeline")
 async def list_pipelines():
     return {"data": pm.list_pipeline()}
 
-@app.get("/api/pipelines/pipeline/{pipeline_id}")
+@app.get("/pipeline/{pipeline_id}")
 async def get_pipeline(pipeline_id: str):
     try:
         pipeline = pm.get_pipeline(pipeline_id)
@@ -67,13 +67,13 @@ async def get_pipeline(pipeline_id: str):
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
 
-@app.post("/api/pipelines/pipeline")
+@app.post("/pipeline")
 async def create_pipeline(pipeline: Pipeline):
     pm.save_pipeline(pipeline)
     return {"id": pipeline.id}
 
 
-@app.put("/api/pipelines/pipeline/{pipeline_id}")
+@app.put("/pipeline/{pipeline_id}")
 async def update_pipeline(pipeline_id: str, pipeline: Pipeline):
     if pipeline.id != pipeline_id:
         raise HTTPException(status_code=400, detail="Pipeline ID mismatch")
@@ -81,7 +81,7 @@ async def update_pipeline(pipeline_id: str, pipeline: Pipeline):
     return {"id": pipeline.id}
 
 
-@app.delete("/api/pipelines/pipeline/{pipeline_id}")
+@app.delete("/pipeline/{pipeline_id}")
 async def delete_pipeline(pipeline_id: str):
     try:
         pm.del_pipeline(pipeline_id)
@@ -94,7 +94,7 @@ class RenameRequest(BaseModel):
     new_id: str
 
 
-@app.put("/api/pipelines/{pipeline_id}/rename")
+@app.put("/{pipeline_id}/rename")
 async def rename_pipeline(pipeline_id: str, req: RenameRequest):
     try:
         pm.rename_pipeline(pipeline_id, req.new_id)
@@ -112,7 +112,7 @@ class RunRequest(BaseModel):
     pipeline: typing.Optional[Pipeline] = None
 
 
-@app.post("/api/pipelines/{pipeline_id}/run")
+@app.post("/{pipeline_id}/run")
 async def run_pipeline_with_id(pipeline_id: str, rreq: RunRequest):
     try:
         pipeline: Pipeline = pm.get_pipeline(pipeline_id)
@@ -136,7 +136,7 @@ async def run_pipeline_with_id(pipeline_id: str, rreq: RunRequest):
         )
 
 
-@app.post("/api/pipelines/run")
+@app.post("/run")
 async def run_pipeline(rreq: RunRequest):
     try:
         ctx = await rreq.pipeline.arun(
@@ -165,7 +165,7 @@ class CronGenerateResponse(BaseModel):
     cron: str
 
 
-@app.post("/api/pipelines/cron/generate")
+@app.post("/cron/generate")
 async def cron_generate(req: CronGenerateRequest) -> CronGenerateResponse:
     api_key = os.getenv("OPENAI_API_KEY")
     base_url = os.getenv("OPENAI_BASE_URL")
@@ -203,7 +203,7 @@ async def cron_generate(req: CronGenerateRequest) -> CronGenerateResponse:
         return CronGenerateResponse(cron="")
 
 
-@app.get("/api/pipelines/node/types")
+@app.get("/node/types")
 def list_node_types():
     node_cls_list = get_all_node_cls()
     return [
@@ -219,7 +219,7 @@ def list_node_types():
     ]
 
 
-@app.get("/api/pipelines/node/schema/{type}")
+@app.get("/node/schema/{type}")
 def node_schema(type: str):
     node_cls = Node._node_registry.get(type)
     if node_cls is None:
@@ -227,7 +227,7 @@ def node_schema(type: str):
     return node_cls.model_json_schema()
 
 
-@app.get("/api/pipelines/node/help/{type}")
+@app.get("/node/help/{type}")
 async def node_help(type: str):
     node_cls = Node._node_registry.get(type)
     if node_cls is None:
@@ -299,7 +299,7 @@ class AgentChatRequest(BaseModel):
     pipeline: Pipeline
 
 
-@app.post("/api/pipelines/agent/chat")
+@app.post("/agent/chat")
 async def agent_chat(req: AgentChatRequest):
     """Stateless agent chat endpoint.
 
@@ -319,17 +319,17 @@ async def agent_chat(req: AgentChatRequest):
     return StreamingResponse(generator(), media_type="text/event-stream")
 
 
-@app.get("/api/pipelines/instance/list")
+@app.get("/instance/list")
 async def instances():
     return await asyncio.to_thread(client.process.instances.get)
 
 
-@app.get("/api/pipelines/{pipeline_id}/cron/contexts")
+@app.get("/{pipeline_id}/cron/contexts")
 async def list_cron_contexts(pipeline_id: str):
     return {"data": pm.list_cron_contexts(pipeline_id)}
 
 
-@app.get("/api/pipelines/{pipeline_id}/cron/contexts/{filename:path}")
+@app.get("/{pipeline_id}/cron/contexts/{filename:path}")
 async def get_cron_context(pipeline_id: str, filename: str):
     try:
         return pm.get_cron_context(pipeline_id, filename)
@@ -337,12 +337,12 @@ async def get_cron_context(pipeline_id: str, filename: str):
         raise HTTPException(status_code=404, detail="Cron context not found")
 
 
-@app.get("/api/pipelines/cron/status")
+@app.get("/cron/status")
 async def cron_status():
     return {"data": pm.get_cron_status()}
 
 
-@app.get("/api/pipelines/{pipeline_id}/cron/next")
+@app.get("/{pipeline_id}/cron/next")
 async def cron_next(pipeline_id: str):
     try:
         return pm.get_next_cron_time(pipeline_id)

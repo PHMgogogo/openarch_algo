@@ -18,10 +18,9 @@
             "rule_type": "PREFIX",
             "pattern": "/api/pipelines",
             "dest_index": [
-                0,
                 1
             ],
-            "dest_format": "%s%s",
+            "dest_format": "%s",
             "rewrite_host": "127.0.0.1:8008",
             "editable": true,
             "timeout": null,
