@@ -194,8 +194,10 @@ async def lifespan(app: FastAPI):
                 return PlainTextResponse("loop", status_code=508)
             if upr.file_serve_root_path is not None:
                 return PlainTextResponse("wrong request type", status_code=400)
-            dest_url = host + "/" + dest.lstrip("/")
-            return await frp.proxy_pass_websocket(websocket, dest_url)
+            proxy_host = host
+            if not proxy_host.startswith(("http://", "https://")):
+                proxy_host = "http://" + proxy_host
+            return await frp.proxy_pass_websocket(websocket, proxy_host)
         except:
             return PlainTextResponse("no match", status_code=404)
 

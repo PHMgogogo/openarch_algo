@@ -377,7 +377,9 @@ class ProcessManager:
     async def watch(self):
         keys = list(self.processes.keys())
         for iid in keys:
-            if iid in self.processes:
+            try:
+                if iid not in self.processes:
+                    continue
                 if "0" not in self.processes[iid]:
                     if self.instances[iid].restart_check():
                         await self.exec(iid)
@@ -401,6 +403,9 @@ class ProcessManager:
                     self.instances[iid].status = InstanceStatus.EXITED
                     self.instances[iid].stop_time = datetime.now()
                 await self.instances[iid].log.flush_all()
+            except Exception:
+                traceback.print_exc()
+                self.instances[iid].stop_time = datetime.now()
 
     async def write_to_proc(self, instance_id: str, data: bytes, flush: bool = True):
         self.processes[instance_id]["0"].stdin.write(data)
@@ -415,6 +420,8 @@ class ProcessManager:
                 await self.service_helper.watch(interval)
             except KeyboardInterrupt:
                 break
+            except Exception:
+                traceback.print_exc()
 
     def delete_template(self, id_or_prefix: str) -> Template:
         template = self.get_template(id_or_prefix)

@@ -137,6 +137,7 @@ class Container:
                 **train_args.model_dump(),
             )
         )
+        self.task.add_done_callback(self._on_task_done)
         self.state = State.TRAINING
         if detach:
             return []
@@ -168,6 +169,7 @@ class Container:
                 **eval_args.model_dump(),
             )
         )
+        self.task.add_done_callback(self._on_task_done)
         self.state = State.INFERRING
         if detach:
             return []
@@ -187,6 +189,19 @@ class Container:
             return self.task.done()
         else:
             return True
+
+    def _on_task_done(self, task: asyncio.Task) -> None:
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            print(f"Task failed: {type(e).__name__}: {e}", flush=True)
+        finally:
+            # Reset state so the service can keep running even if the task
+            # raised or was cancelled before result_callback(done=True) ran.
+            if self.state in (State.TRAINING, State.INFERRING):
+                self.state = State.LOADED
 
 
 class PathRequest(BaseModel):

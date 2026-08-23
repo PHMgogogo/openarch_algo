@@ -409,5 +409,10 @@ async def index():
     return FileResponse("./index.html")
 
 
+@app.get("/marked.min.js")
+async def marked_js():
+    return FileResponse("./marked.min.js")
+
+
 if __name__ == "__main__":
     asyncio.run(cli())

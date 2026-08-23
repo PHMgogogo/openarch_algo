@@ -305,7 +305,7 @@ def train_or_eval(
     epoch_callback: typing.Callable[..., None] = lambda *args, **kwargs: None,
     batch_callback: typing.Callable[..., None] = lambda *args, **kwargs: None,
     result_callback: typing.Callable[..., None] = lambda *args, **kwargs: None,
-    interrupt_signal: typing.Callable[[], bool] = lambda: True,
+    interrupt_signal: typing.Callable[[], bool] = lambda: False,
     pred_len: int | None = None,
 ) -> list[ModelResult]:
     model_result = []
