@@ -1331,8 +1331,10 @@
             for (let o = 0; o < outputCount; o++) {
                 colHeaders.push(`预测_${o}`);
             }
-            if (labelCols.length > 0) {
-                colHeaders = colHeaders.concat(labelCols.map(l => l + '_真实'));
+            // 若 label 列名与 data 列名相同，则不重复渲染（仅保留 data 列）
+            const extraLabelCols = labelCols.filter(l => !dataCols.includes(l));
+            if (extraLabelCols.length > 0) {
+                colHeaders = colHeaders.concat(extraLabelCols.map(l => l + '_真实'));
             }
 
             let thead = '<thead><tr>';
@@ -1365,9 +1367,9 @@
                 } else {
                     for (let o = 0; o < outputCount; o++) tbody += '<td>-</td>';
                 }
-                // Labels (actual values)
-                if (labelCols.length > 0 && csvRows[rowId] !== undefined) {
-                    labelCols.forEach(lc => {
+                // Labels (actual values) — 跳过与 data 列名相同的列，避免重复渲染
+                if (extraLabelCols.length > 0 && csvRows[rowId] !== undefined) {
+                    extraLabelCols.forEach(lc => {
                         const colIdx = csvHeaders.indexOf(lc);
                         tbody += `<td>${colIdx >= 0 ? csvRows[rowId][colIdx] : ''}</td>`;
                     });
@@ -1533,9 +1535,10 @@
                 seriesRaw.push({ name: '预测_' + o, data: sData, style: { lineStyle: { width: 3 } } });
             }
 
-            // Label series (actual values)
-            if (labelCols && labelCols.length > 0) {
-                for (const lc of labelCols) {
+            // Label series (actual values) — 跳过与 data 列名相同的列，避免重复渲染
+            const extraLabelCols = (labelCols || []).filter(l => !(dataCols || []).includes(l));
+            if (extraLabelCols.length > 0) {
+                for (const lc of extraLabelCols) {
                     const colIdx = csvHeaders.indexOf(lc);
                     if (colIdx < 0) continue;
                     const sData = [];

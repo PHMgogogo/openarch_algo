@@ -24,3 +24,4 @@ jinja2
 jsonpatch
 openai-agents
 croniter
+pathspec

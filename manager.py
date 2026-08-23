@@ -8,7 +8,10 @@ from entity import (
     FileMetaInfo,
 )
 import asyncio
+import io
 import os
+import shutil
+import pathspec
 from config import Config
 import zipfile
 from datetime import datetime, timedelta
@@ -149,6 +152,34 @@ class AsyncIOWrapper:
         self.output.extend(data)
         self.output = self.output[-self.MAX_OUTPUT_LENGTH :]
         self.output_ready.set()
+
+
+class ZipStream(io.RawIOBase):
+    def __init__(self):
+        super().__init__()
+        self._queue = asyncio.Queue()
+        self._pos = 0
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, b) -> int:
+        self._queue.put_nowait(bytes(b))
+        self._pos += len(b)
+        return len(b)
+
+    def tell(self) -> int:
+        return self._pos
+
+    def finish(self) -> None:
+        self._queue.put_nowait(None)
+
+    async def chunks(self):
+        while True:
+            item = await self._queue.get()
+            if item is None:
+                break
+            yield item
 
 
 class LazyTemporaryTemplateManager:
@@ -441,6 +472,7 @@ class ProcessManager:
         restart_interval_seconds: float = 10,
         bind_listener: bool = False,
         rules: list[UrlProxyRule] = [],
+        tags: set[str] = set(),
     ) -> Template:
         if id is not None:
             existing = self.get_template(id)
@@ -455,6 +487,7 @@ class ProcessManager:
             restart_interval_seconds=restart_interval_seconds,
             bind_listener=bind_listener,
             rules=rules,
+            tags=tags,
         )
         if id is not None:
             template.id = id
@@ -574,8 +607,87 @@ class ProcessManager:
                             os.rename(src, dst)
                     os.rmdir(single_item_path)
 
+        info_path = os.path.join(path, Config.algorithm_info_path)
+        if os.path.exists(info_path):
+            try:
+                uploaded = Algorithm.model_validate_json(
+                    open(info_path, encoding="utf-8").read()
+                )
+                algorithm.base_on = uploaded.base_on
+                algorithm.ignores = uploaded.ignores
+            except Exception as e:
+                print(f"Skip algorithm info: {type(e).__name__}: {e}")
+        if algorithm.base_on:
+            base_path = os.path.join(
+                Config.algorithm_root_path,
+                algorithm.base_on,
+                Config.algorithm_info_path,
+            )
+            if not os.path.exists(base_path):
+                raise ValueError(
+                    f"base_on algorithm '{algorithm.base_on}' does not exist"
+                )
+
         algorithm.save()
         return algorithm
+
+    async def publish_instance_zip(
+        self,
+        instance_id: str,
+        output_path: str = None,
+        ignore: list[str] = None,
+    ) -> typing.AsyncGenerator[bytes, None] | None:
+        """打包单个实例为 zip（ZIP_STORED，逐文件流式）。
+
+        output_path 指定则写入该文件并返回 None；否则返回异步生成器流式输出。
+        ignore 为 pathspec 规则列表，用于排除实例内的文件/目录。
+        """
+        instance = self.get_instance(instance_id)
+        if not isinstance(instance, Instance):
+            raise KeyError(instance_id)
+
+        if output_path:
+            await asyncio.to_thread(
+                self._write_zip, instance, open(output_path, "wb"), ignore
+            )
+            return None
+
+        stream = ZipStream()
+        task = asyncio.create_task(
+            asyncio.to_thread(self._write_zip, instance, stream, ignore)
+        )
+
+        async def gen():
+            try:
+                async for chunk in stream.chunks():
+                    yield chunk
+            finally:
+                await task
+
+        return gen()
+
+    def _write_zip(self, instance: Instance, out, ignore: list[str] = None) -> None:
+        """把实例目录逐文件写入 zip，arcname 不含实例 id，可忽略指定文件。"""
+        spec = pathspec.PathSpec.from_lines("gitwildmatch", ignore or [])
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as zf:
+            for root, dirs, files in os.walk(instance.path):
+                # 剪枝被忽略的目录
+                dirs[:] = [
+                    d
+                    for d in dirs
+                    if not spec.match_file(
+                        os.path.relpath(os.path.join(root, d), instance.path)
+                    )
+                ]
+                for f in files:
+                    full = os.path.join(root, f)
+                    rel = os.path.relpath(full, instance.path)
+                    if spec.match_file(rel):
+                        continue
+                    with zf.open(rel, "w") as dst, open(full, "rb") as src:
+                        shutil.copyfileobj(src, dst, 64 * 1024)
+        if hasattr(out, "finish"):
+            out.finish()
 
 
 if __name__ == "__main__":

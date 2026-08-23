@@ -1,5 +1,10 @@
 {
     "id": "analysis_stat_afd",
     "version": "",
-    "description": ""
+    "description": "",
+    "base_on": "framework",
+    "ignores": [
+        "server.py",
+        "__pycache__"
+    ]
 }

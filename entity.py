@@ -1,8 +1,10 @@
+from __future__ import annotations
 import os
 import uuid
 from config import Config
 from enum import Enum, auto
 import shutil
+import pathspec
 from pydantic import BaseModel, Field
 import asyncio
 import aiofiles
@@ -47,11 +49,57 @@ class Algorithm(BaseModel):
     )
     version: str = ""
     description: str = ""
+    base_on: str = ""
+    ignores: list[str] = Field(default_factory=list)
+
+    def _base_chain(self) -> list[Algorithm]:
+        chain = []
+        seen = set()
+        cur = self
+        while cur.base_on:
+            if cur.base_on in seen:
+                raise ValueError(f"circular base_on: {cur.base_on}")
+            seen.add(cur.base_on)
+            base = Algorithm.model_validate_json(
+                open(
+                    os.path.join(
+                        Config.algorithm_root_path,
+                        cur.base_on,
+                        Config.algorithm_info_path,
+                    ),
+                    encoding="utf-8",
+                ).read()
+            )
+            chain.append(base)
+            cur = base
+        chain.reverse()
+        return chain
 
     async def copy_to(self, target_path: str):
         os.makedirs(target_path, exist_ok=True)
-        await asyncio.to_thread(
-            shutil.copytree, self.path, target_path, dirs_exist_ok=True
+        for algo in [*self._base_chain(), self]:
+            await asyncio.to_thread(self._copy_one, algo, target_path)
+
+    def _copy_one(self, algo: Algorithm, target_path: str):
+        spec = pathspec.PathSpec.from_lines("gitwildmatch", algo.ignores)
+        ignored = set()
+        for root, dirs, files in os.walk(algo.path):
+            for name in dirs + files:
+                rel = os.path.relpath(os.path.join(root, name), algo.path)
+                if spec.match_file(rel):
+                    ignored.add(rel)
+
+        def _ignore(directory: str, names: list[str]) -> set[str]:
+            base = os.path.relpath(directory, algo.path)
+            skip = set()
+            for name in names:
+                rel = os.path.join(base, name) if base != "." else name
+                if rel in ignored:
+                    skip.add(name)
+            return skip
+
+        shutil.copytree(
+            algo.path, target_path, dirs_exist_ok=True, ignore=_ignore
         )
 
     def tree(self):

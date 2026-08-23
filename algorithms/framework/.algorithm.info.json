@@ -1,5 +1,9 @@
 {
     "id": "framework",
     "version": "",
-    "description": ""
+    "description": "",
+    "base_on": "",
+    "ignores": [
+        "__pycache__"
+    ]
 }

@@ -1,5 +1,10 @@
 {
     "id": "analysis_dl_fp",
     "version": "",
-    "description": ""
+    "description": "",
+    "base_on": "framework",
+    "ignores": [
+        "server.py",
+        "__pycache__"
+    ]
 }

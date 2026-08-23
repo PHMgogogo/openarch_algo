@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket, Query
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Literal
 import asyncio
@@ -72,6 +72,8 @@ class AlgorithmResponse(BaseModel):
     version: str
     description: str
     tree: Optional[dict[str, dict | None]] = None
+    base_on: str
+    ignores: list[str]
 
 
 class HighLevelCreateResponse(BaseModel):
@@ -96,6 +98,8 @@ async def get_algorithm_detail(algorithm_id: str):
         version=algorithm.version,
         description=algorithm.description,
         tree=algorithm.tree(),
+        base_on=algorithm.base_on,
+        ignores=algorithm.ignores,
     )
 
 
@@ -147,6 +151,8 @@ async def upload_algorithm(
             version=algorithm.version,
             description=algorithm.description,
             tree=algorithm.tree(),
+            base_on=algorithm.base_on,
+            ignores=algorithm.ignores,
         )
     finally:
         # Clean up the temporary file
@@ -222,6 +228,21 @@ async def get_instance(instance_id: str):
     }
 
 
+@app.get("/instances/{instance_id}/publish")
+async def publish_instance(
+    instance_id: str,
+    ignore: list[str] = Query(default=[]),
+    filename: str = None,
+):
+    gen = await pm.publish_instance_zip(instance_id, ignore=ignore)
+    name = filename or f"{instance_id}.zip"
+    return StreamingResponse(
+        gen,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
 @app.get("/instances/{instance_id}/logs/out")
 async def get_instance_logs_out(instance_id: str):
     logs = await pm.get_log_out(instance_id)
@@ -276,12 +297,14 @@ async def highlevel_create(
         id=algo_detail.id,
         version=algo_detail.version,
         description=algo_detail.description,
+        base_on=algo_detail.base_on,
+        ignores=algo_detail.ignores,
     )
     template = await get_template_detail("framework")
     template.algorithm = algo_info
     template.is_temporary = True
     template.id = uid
-    template.tags.append("highlevel")
+    template.tags.add("highlevel")
     if template.rules is None:
         template.rules = []
     template.rules.append(
