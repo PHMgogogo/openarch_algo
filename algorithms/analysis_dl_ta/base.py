@@ -306,6 +306,7 @@ def train_or_eval(
     batch_callback: typing.Callable[..., None] = lambda *args, **kwargs: None,
     result_callback: typing.Callable[..., None] = lambda *args, **kwargs: None,
     interrupt_signal: typing.Callable[[], bool] = lambda: True,
+    pred_len: int | None = None,
 ) -> list[ModelResult]:
     model_result = []
     train = mode == "train"
@@ -338,8 +339,54 @@ def train_or_eval(
         epoch = 1
         model.eval()
 
-    data_loader = DataLoader(data, batch_size, shuffle=shuffle)
     null_f = None if progress else open(os.devnull, "w")
+
+    if isinstance(data, _TableAsSequenceWrapper) and not train:
+        # 推理：自回归。以整条序列的最后 seq_len 行作为输入窗口，
+        # 逐点外推 pred_len 步，pred_len 默认等于原序列长度（整条数据的行数）。
+        table = data.table
+        n_steps = pred_len if pred_len is not None else len(table.df)
+        if n_steps <= 0:
+            result_callback(done=True)
+            return model_result
+        input_rows = table.df.iloc[-data.seq_len :]
+        window = torch.tensor(
+            input_rows[table.data_cols].values.astype(float),
+            dtype=torch.float32,
+        ).to(device)  # (seq_len, D)
+        epoch_progress = tqdm(range(epoch), file=null_f)
+        with torch.no_grad():
+            for ep in epoch_progress:
+                epoch_callback(**epoch_progress.format_dict)
+                preds = []
+                step_progress = tqdm(range(n_steps), file=null_f)
+                for _ in step_progress:
+                    if interrupt_signal():
+                        result_callback(done=True)
+                        return model_result
+                    batch_callback(**step_progress.format_dict)
+                    out = model(window.unsqueeze(0)).squeeze(0)  # (D,)
+                    preds.append(out.nan_to_num(0))
+                    window = torch.cat([window[1:], out.unsqueeze(0)], dim=0)
+                r = ModelResult(
+                    loss=0.0,
+                    outputs=torch.stack(preds).tolist(),
+                    ids=list(range(len(table.df), len(table.df) + n_steps)),
+                )
+                r.description = (
+                    f"Autoregressive forecast: input = last {data.seq_len} rows, "
+                    f"predicted {n_steps} steps (pred_len = original sequence length)."
+                )
+                model_result.append(r)
+                result_callback(result=r)
+                tqdm.write(
+                    f"Epoch {ep}: Autoregressive forecast {n_steps} steps", null_f
+                )
+        epoch_callback(**epoch_progress.format_dict)
+        result_callback(done=True)
+        return model_result
+
+    data_loader = DataLoader(data, batch_size, shuffle=shuffle)
     epoch_progress = tqdm(range(epoch), file=null_f)
     with torch.no_grad() if not train else nullcontext():
         for ep in epoch_progress:

@@ -1286,6 +1286,20 @@
             return resultPageState[pageKey];
         }
 
+        // 合并预测行号与原始数据行号（原始数据行号为 0..csvRowCount-1），
+        // 返回按行号升序、去重后的行号列表，用于同时展示原始数据与预测数据
+        function mergeRowIds(predIds, csvRowCount) {
+            const seen = new Set();
+            const merged = [];
+            const add = (id) => {
+                if (id >= 0 && !seen.has(id)) { seen.add(id); merged.push(id); }
+            };
+            (predIds || []).forEach(add);
+            for (let r = 0; r < (csvRowCount || 0); r++) add(r);
+            merged.sort((a, b) => a - b);
+            return merged;
+        }
+
         function renderResultTable(result, csvRows, csvHeaders, dataCols, labelCols, pageKey) {
             if (!result.ids || result.ids.length === 0) {
                 // No ids — show summary only
@@ -1293,11 +1307,13 @@
                     <div class="result-summary">${result.description || ''}</div>`;
             }
 
-            // Sort by row id
-            const sortedIdx = result.ids.map((id, i) => i).sort((a, b) => result.ids[a] - result.ids[b]);
+            // outputs[i] 与 result.ids[i] 对齐；合并预测行号与原始数据行号，
+            // 使表格按行号同时展示原始数据与预测数据
+            const idMap = new Map(result.ids.map((id, i) => [id, i]));
+            const mergedIds = mergeRowIds(result.ids, csvRows.length);
 
             const ps = getPageState(pageKey);
-            const totalRows = result.ids.length;
+            const totalRows = mergedIds.length;
             const totalPages = Math.ceil(totalRows / ps.pageSize);
             if (ps.page >= totalPages) ps.page = Math.max(0, totalPages - 1);
 
@@ -1325,8 +1341,7 @@
 
             let tbody = '<tbody>';
             for (let j = start; j < end; j++) {
-                const i = sortedIdx[j];
-                const rowId = result.ids[i];
+                const rowId = mergedIds[j];
                 tbody += '<tr>';
                 tbody += `<td>${rowId}</td>`;
                 // Data columns from CSV
@@ -1344,8 +1359,9 @@
                     for (let c = 0; c < fillerCount; c++) tbody += '<td>-</td>';
                 }
                 // Predictions
-                if (result.outputs && result.outputs[i] !== undefined) {
-                    result.outputs[i].forEach(v => { tbody += `<td>${v.toFixed(6)}</td>`; });
+                const outIdx = idMap.get(rowId);
+                if (result.outputs && outIdx !== undefined && result.outputs[outIdx] !== undefined) {
+                    result.outputs[outIdx].forEach(v => { tbody += `<td>${v.toFixed(6)}</td>`; });
                 } else {
                     for (let o = 0; o < outputCount; o++) tbody += '<td>-</td>';
                 }
@@ -1474,17 +1490,14 @@
             const container = document.getElementById('resultChartView_' + pageKey);
             if (!container || result.ids.length === 0) return;
 
-            const N = result.ids.length;
+            // outputs[i] 与 result.ids[i] 对齐；以合并后的行号（原始数据 ∪ 预测）作为统一的 x 轴，
+            // 使图表同时展示原始数据与预测数据
+            const idMap = new Map(result.ids.map((id, i) => [id, i]));
+            const mergedIds = mergeRowIds(result.ids, csvRows.length);
+            const N = mergedIds.length;
             const MAX_POINTS = 1000;
 
-            // Sort by row id
-            const sortedIdx = result.ids.map((id, i) => i).sort((a, b) => result.ids[a] - result.ids[b]);
-
-            // Build raw data arrays
-            let xRaw = [];
-            for (let i = 0; i < N; i++) xRaw.push(i);
-
-            // Build all series raw data
+            // Build all series raw data aligned to merged row ids
             let seriesRaw = [];  // { name, data[], style }
 
             // Data columns (feature columns)
@@ -1493,9 +1506,7 @@
                     const colIdx = csvHeaders.indexOf(dc);
                     if (colIdx < 0) continue;
                     const sData = [];
-                    for (let j = 0; j < N; j++) {
-                        const i = sortedIdx[j];
-                        const rowId = result.ids[i];
+                    for (const rowId of mergedIds) {
                         if (csvRows[rowId] !== undefined) {
                             const val = parseFloat(csvRows[rowId][colIdx]);
                             sData.push(isNaN(val) ? null : val);
@@ -1511,10 +1522,10 @@
             const outputCount = result.outputs && result.outputs[0] ? result.outputs[0].length : 0;
             for (let o = 0; o < outputCount; o++) {
                 const sData = [];
-                for (let j = 0; j < N; j++) {
-                    const i = sortedIdx[j];
-                    if (result.outputs && result.outputs[i] !== undefined) {
-                        sData.push(result.outputs[i][o]);
+                for (const rowId of mergedIds) {
+                    const outIdx = idMap.get(rowId);
+                    if (result.outputs && outIdx !== undefined && result.outputs[outIdx] !== undefined) {
+                        sData.push(result.outputs[outIdx][o]);
                     } else {
                         sData.push(null);
                     }
@@ -1528,9 +1539,7 @@
                     const colIdx = csvHeaders.indexOf(lc);
                     if (colIdx < 0) continue;
                     const sData = [];
-                    for (let j = 0; j < N; j++) {
-                        const i = sortedIdx[j];
-                        const rowId = result.ids[i];
+                    for (const rowId of mergedIds) {
                         if (csvRows[rowId] !== undefined) {
                             const val = parseFloat(csvRows[rowId][colIdx]);
                             sData.push(isNaN(val) ? null : val);
@@ -1543,7 +1552,7 @@
             }
 
             // Downsample if too many points
-            let xData = xRaw;
+            let xData = mergedIds;
             let seriesList;
             if (N > MAX_POINTS) {
                 const step = N / MAX_POINTS;
@@ -1555,7 +1564,7 @@
                 if (sampledIdx[sampledIdx.length - 1] !== N - 1) {
                     sampledIdx.push(N - 1);
                 }
-                xData = sampledIdx.map(i => xRaw[i]);
+                xData = sampledIdx.map(i => mergedIds[i]);
                 seriesList = seriesRaw.map(sr => ({
                     name: sr.name,
                     type: 'line',

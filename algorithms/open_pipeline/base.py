@@ -317,6 +317,7 @@ class SendAlarmNode(Node):
                     "raw_data": self.parameters.raw_data,
                     "time": str(datetime.now()),
                     "level": alarm_item.level,
+                    "threshold": alarm_item.threshold,
                 }
             )
         client.analysis.alarm.adds(alarms)
@@ -370,6 +371,7 @@ class AlarmIfNumberStateKNode(Node):
                     range=(0, max_len),
                     message=message,
                     level=self.parameters.level,
+                    threshold=threshold
                 )
             )
         return [], True
@@ -989,6 +991,7 @@ class AlarmItem(BaseModel):
     range: tuple[int, int]
     message: str
     level: int
+    threshold: float
 
 
 class Alarm:

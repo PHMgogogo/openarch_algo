@@ -584,6 +584,7 @@ class analysis:
             raw_data: str = "",
             time: str = None,
             level: int = 1,
+            threshold: float = 0,
         ):
             if time is None:
                 time = datetime.now()
@@ -599,6 +600,7 @@ class analysis:
                             "raw_data": raw_data,
                             "time": time,
                             "level": level,
+                            "threshold": threshold,
                         }
                     ],
                 )

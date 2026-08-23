@@ -189,12 +189,83 @@ def train_or_eval(
     batch_callback: typing.Callable[..., None] = lambda *args, **kwargs: None,
     result_callback: typing.Callable[..., None] = lambda *args, **kwargs: None,
     interrupt_signal: typing.Callable[[], bool] = lambda: True,
+    pred_len: int | None = None,
 ) -> list[ModelResult]:
     model_result = []
     device = "cpu"
     train = mode == "train"
+    seq_len = 16
     if isinstance(data, TableByRowDataset):
-        data = _TableAsSequenceWrapper(data, seq_len=16)
+        data = _TableAsSequenceWrapper(data, seq_len=seq_len)
+    model = model.to(device)
+    null_f = None if progress else open(os.devnull, "w")
+
+    if isinstance(data, _TableAsSequenceWrapper):
+        table = data.table
+        if train:
+            # 训练：全量拟合。用所有滑动窗口样本训练随机森林
+            data_loader = DataLoader(data, len(data), shuffle=shuffle)
+            batch_data, batch_labels, batch_ids = next(iter(data_loader))
+            model.fit(batch_data, batch_labels)
+            r = ModelResult(
+                loss=0.0,
+                outputs=[],
+                ids=[],
+                description=(
+                    f"Fitted RandomForest on all {len(data)} sliding-window samples "
+                    f"of the full sequence ({len(table.df)} rows)."
+                ),
+            )
+            model_result.append(r)
+            result_callback(result=r)
+            result_callback(done=True)
+            return model_result
+        else:
+            # 推理：自回归。以整条序列的最后 seq_len 行作为输入窗口，
+            # 逐点外推 pred_len 步，pred_len 默认等于原序列长度（整条数据的行数）。
+            n_steps = pred_len if pred_len is not None else len(table.df)
+            if n_steps <= 0:
+                result_callback(done=True)
+                return model_result
+            epoch = 1
+            model.eval()
+            input_rows = table.df.iloc[-data.seq_len :]
+            window = torch.tensor(
+                input_rows[table.data_cols].values.astype(float),
+                dtype=torch.float32,
+            ).to(device)  # (seq_len, D)
+            epoch_progress = tqdm(range(epoch), file=null_f)
+            with torch.no_grad():
+                for ep in epoch_progress:
+                    epoch_callback(**epoch_progress.format_dict)
+                    preds = []
+                    step_progress = tqdm(range(n_steps), file=null_f)
+                    for _ in step_progress:
+                        if interrupt_signal():
+                            result_callback(done=True)
+                            return model_result
+                        batch_callback(**step_progress.format_dict)
+                        out = model(window.unsqueeze(0)).squeeze(0)  # (D,)
+                        preds.append(out.nan_to_num(0))
+                        window = torch.cat([window[1:], out.unsqueeze(0)], dim=0)
+                    r = ModelResult(
+                        loss=0.0,
+                        outputs=torch.stack(preds).tolist(),
+                        ids=list(range(len(table.df), len(table.df) + n_steps)),
+                    )
+                    r.description = (
+                        f"Autoregressive forecast: input = last {data.seq_len} rows, "
+                        f"predicted {n_steps} steps (pred_len = original sequence length)."
+                    )
+                    model_result.append(r)
+                    result_callback(result=r)
+                    tqdm.write(
+                        f"Epoch {ep}: Autoregressive forecast {n_steps} steps", null_f
+                    )
+            epoch_callback(**epoch_progress.format_dict)
+            result_callback(done=True)
+            return model_result
+
     if train:
         data_loader = DataLoader(data, len(data), shuffle=shuffle)
         batch_data, batch_labels, batch_ids = next(iter(data_loader))
@@ -205,9 +276,7 @@ def train_or_eval(
         model.eval()
     if criterion is None:
         criterion = nn.MSELoss()
-    model = model.to(device)
     data_loader = DataLoader(data, batch_size, shuffle=shuffle)
-    null_f = None if progress else open(os.devnull, "w")
     epoch_progress = tqdm(range(epoch), file=null_f)
     with torch.no_grad() if not train else nullcontext():
         for ep in epoch_progress:

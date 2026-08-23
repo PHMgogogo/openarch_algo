@@ -28,3 +28,4 @@ __pycache__
 rules.json.lock
 dump.md
 ezcli_doc.md
+model.pth

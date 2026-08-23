@@ -137,10 +137,10 @@ class ServiceManager:
 def safe_file_response(path: str):
     if not os.path.exists(path):
         return PlainTextResponse("File not found", status_code=404)
-
     if not os.path.isfile(path):
         return PlainTextResponse("Invalid file", status_code=400)
-
+    response = FileResponse(path)
+    response.headers["Cache-Control"] = "public, max-age=3600"
     return FileResponse(path)
 
 
