@@ -134,14 +134,14 @@ class ServiceManager:
                 pass
 
 
-def safe_file_response(path: str):
-    if not os.path.exists(path):
-        return PlainTextResponse("File not found", status_code=404)
-    if not os.path.isfile(path):
-        return PlainTextResponse("Invalid file", status_code=400)
-    response = FileResponse(path)
-    response.headers["Cache-Control"] = "public, max-age=3600"
-    return FileResponse(path)
+def safe_file_response(path: str, fallback_path: str | None = None):
+    if os.path.isfile(path):
+        response = FileResponse(path)
+        response.headers["Cache-Control"] = "public, max-age=3600"
+        return response
+    if fallback_path is not None:
+        return safe_file_response(fallback_path)
+    return PlainTextResponse("File not found", status_code=404)
 
 
 class CorsMiddleware(BaseHTTPMiddleware):
@@ -173,7 +173,14 @@ async def lifespan(app: FastAPI):
                 return PlainTextResponse("wrong request type", status_code=405)
             if dest.startswith("/"):
                 dest = dest[1:]
-            return safe_file_response(os.path.join(upr.file_serve_root_path, dest))
+            return safe_file_response(
+                os.path.join(upr.file_serve_root_path, dest),
+                (
+                    os.path.join(upr.file_serve_root_path, upr.file_serve_fallback)
+                    if upr.file_serve_fallback is not None
+                    else None
+                ),
+            )
         raw_host = request.headers.get("host")
         if upr.cors:
             request.state.cors = True

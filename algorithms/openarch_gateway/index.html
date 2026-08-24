@@ -309,6 +309,7 @@
                     <th>重写主机</th>
                     <th>超时</th>
                     <th>文件根路径</th>
+                    <th>回退文件</th>
                     <th>默认入口</th>
                     <th>CORS</th>
                     <th>状态</th>
@@ -317,7 +318,7 @@
             </thead>
             <tbody id="rules-body">
                 <tr>
-                    <td colspan="13" style="text-align: center;">加载中...</td>
+                    <td colspan="14" style="text-align: center;">加载中...</td>
                 </tr>
             </tbody>
         </table>
@@ -386,6 +387,12 @@
                     <input type="text" id="rule-file-serve-root-path" placeholder="/path/to/root" oninput="testRule()">
                     <small
                         style="color: #666; display: block; margin-top: 2px;">设置后，匹配的GET请求将从该路径提供静态文件服务，而非反向代理</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="rule-file-serve-fallback">回退文件 (可选):</label>
+                    <input type="text" id="rule-file-serve-fallback" placeholder="/index.html" oninput="testRule()">
+                    <small style="color: #666; display: block; margin-top: 2px;">请求的文件不存在时，回退到该文件（常用于SPA路由）</small>
                 </div>
 
                 <div class="form-group">
@@ -463,7 +470,7 @@
             tbody.innerHTML = '';
 
             if (rules.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="13" style="text-align: center;">暂无规则</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="14" style="text-align: center;">暂无规则</td></tr>';
                 return;
             }
 
@@ -503,6 +510,7 @@
                     <td>${rule.rewrite_host || '-'}</td>
                     <td>${rule.timeout || '-'}</td>
                     <td>${rule.file_serve_root_path || '-'}</td>
+                    <td>${rule.file_serve_fallback || '-'}</td>
                     <td>${defaultEntranceCell}</td>
                     <td>${rule.cors ? '<span class="rule-type-display rule-type-1">已启用</span>' : '<span style="color:#999;">关闭</span>'}</td>
                     <td><span class="status-${rule.enable ? 'enabled' : 'disabled'}">${rule.enable ? '启用' : '禁用'}</span></td>
@@ -546,6 +554,7 @@
             document.getElementById('rule-rewrite-host').value = rule.rewrite_host || '';
             document.getElementById('rule-timeout').value = rule.timeout || '';
             document.getElementById('rule-file-serve-root-path').value = rule.file_serve_root_path || '';
+            document.getElementById('rule-file-serve-fallback').value = rule.file_serve_fallback || '';
             document.getElementById('rule-default-entrance').value = rule.default_entrance || '';
             document.getElementById('rule-enable').checked = rule.enable;
             document.getElementById('rule-cors').checked = rule.cors || false;
@@ -580,6 +589,7 @@
                 rewrite_host: document.getElementById('rule-rewrite-host').value || null,
                 timeout: document.getElementById('rule-timeout').value ? parseFloat(document.getElementById('rule-timeout').value) : null,
                 file_serve_root_path: document.getElementById('rule-file-serve-root-path').value || null,
+                file_serve_fallback: document.getElementById('rule-file-serve-fallback').value || null,
                 default_entrance: document.getElementById('rule-default-entrance').value || null,
                 enable: document.getElementById('rule-enable').checked,
                 cors: document.getElementById('rule-cors').checked
@@ -633,6 +643,7 @@
                     rewrite_host: document.getElementById('rule-rewrite-host').value || null,
                     timeout: document.getElementById('rule-timeout').value ? parseFloat(document.getElementById('rule-timeout').value) : null,
                     file_serve_root_path: document.getElementById('rule-file-serve-root-path').value || null,
+                    file_serve_fallback: document.getElementById('rule-file-serve-fallback').value || null,
                     default_entrance: document.getElementById('rule-default-entrance').value || null,
                     enable: document.getElementById('rule-enable').checked,
                     cors: document.getElementById('rule-cors').checked

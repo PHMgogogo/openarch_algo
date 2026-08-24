@@ -449,6 +449,7 @@ class service:
         file_serve_root_path: str = None,
         default_entrance: str = None,
         cors: bool = False,
+        file_serve_fallback: str = None,
     ):
         """Add or update a routing rule
 
@@ -482,6 +483,7 @@ class service:
                     "file_serve_root_path": file_serve_root_path,
                     "default_entrance": default_entrance,
                     "cors": cors,
+                    "file_serve_fallback": file_serve_fallback,
                 },
             )
         )
