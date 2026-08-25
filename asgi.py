@@ -65,6 +65,11 @@ class InstanceResponse(BaseModel):
     id: str
     status: str
     template_id: str
+    template: dict
+    start_time: Optional[str] = None
+    stop_time: Optional[str] = None
+    logs: dict
+    tree: dict
 
 
 class AlgorithmResponse(BaseModel):
@@ -103,13 +108,42 @@ async def get_algorithm_detail(algorithm_id: str):
     )
 
 
+@app.put("/algorithms/{algorithm_id}", response_model=AlgorithmResponse)
+async def update_algorithm(algorithm_id: str, request: Algorithm):
+    if request.id != algorithm_id:
+        raise HTTPException(status_code=400, detail="Algorithm ID mismatch")
+    try:
+        algorithm = pm.update_algorithm(algorithm_id, request)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Algorithm not found")
+    return AlgorithmResponse(
+        id=algorithm.id,
+        version=algorithm.version,
+        description=algorithm.description,
+        tree=algorithm.tree(),
+        base_on=algorithm.base_on,
+        ignores=algorithm.ignores,
+    )
+
+
 @app.get("/instances", response_model=List[InstanceResponse])
 async def get_instances():
     instances = []
     for iid, instance in pm.instances.items():
         instances.append(
             InstanceResponse(
-                id=iid, status=instance.status.name, template_id=instance.template.id
+                id=iid,
+                status=instance.status.name,
+                template_id=instance.template.id,
+                template=instance.template.model_dump(),
+                start_time=instance.start_time.isoformat()
+                if instance.start_time
+                else None,
+                stop_time=instance.stop_time.isoformat()
+                if instance.stop_time
+                else None,
+                logs={"out": instance.log.out_path, "err": instance.log.err_path},
+                tree=instance.tree(),
             )
         )
     return instances
@@ -202,6 +236,26 @@ async def create_template(request: Template):
     return template
 
 
+@app.put("/templates/{template_id}", response_model=Template)
+async def update_template(template_id: str, request: Template):
+    if request.id != template_id:
+        raise HTTPException(status_code=400, detail="Template ID mismatch")
+    try:
+        template = pm.update_template(template_id, request)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template
+
+
+@app.delete("/templates/{template_id}", response_model=Template)
+async def delete_template(template_id: str):
+    try:
+        template = pm.delete_template(template_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template
+
+
 @app.post("/instances", response_model=dict)
 async def create_instance(request: CreateInstanceRequest):
     template = pm.get_template(request.template_id)
@@ -216,16 +270,19 @@ async def create_instance(request: CreateInstanceRequest):
     return {"instance_id": instance_id}
 
 
-@app.get("/instances/{instance_id}", response_model=dict)
+@app.get("/instances/{instance_id}", response_model=InstanceResponse)
 async def get_instance(instance_id: str):
     instance = pm.get_instance(instance_id)
-    return {
-        "id": instance.id,
-        "status": instance.status.name,
-        "template_id": instance.template.id,
-        "logs": {"out": instance.log.out_path, "err": instance.log.err_path},
-        "tree": instance.tree(),
-    }
+    return InstanceResponse(
+        id=instance.id,
+        status=instance.status.name,
+        template_id=instance.template.id,
+        template=instance.template.model_dump(),
+        start_time=instance.start_time.isoformat() if instance.start_time else None,
+        stop_time=instance.stop_time.isoformat() if instance.stop_time else None,
+        logs={"out": instance.log.out_path, "err": instance.log.err_path},
+        tree=instance.tree(),
+    )
 
 
 @app.get("/instances/{instance_id}/publish")
@@ -265,6 +322,25 @@ async def get_instance_connections(instance_id: str):
 async def stop_instance(instance_id: str, force: bool = False):
     await pm.stop(instance_id, force)
     return {"message": "Instance stopped"}
+
+
+@app.post("/instances/{instance_id}/start", response_model=InstanceResponse)
+async def start_instance(instance_id: str):
+    try:
+        await pm.start_instance(instance_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    instance = pm.get_instance(instance_id)
+    return InstanceResponse(
+        id=instance.id,
+        status=instance.status.name,
+        template_id=instance.template.id,
+        template=instance.template.model_dump(),
+        start_time=instance.start_time.isoformat() if instance.start_time else None,
+        stop_time=instance.stop_time.isoformat() if instance.stop_time else None,
+        logs={"out": instance.log.out_path, "err": instance.log.err_path},
+        tree=instance.tree(),
+    )
 
 
 @app.delete("/instances/{instance_id}")

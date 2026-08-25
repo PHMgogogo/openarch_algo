@@ -9,7 +9,7 @@ import os
 from datetime import datetime
 
 PROCESS_MANAGER_URL = os.getenv("PROCESS_MANAGER_URL", "http://127.0.0.1:8001/api/pmgr")
-SERVICE_MANAGER_URL = os.getenv("SERVICE_MANAGER_URL", "http://127.0.0.1:8001/smgr")
+SERVICE_MANAGER_URL = os.getenv("SERVICE_MANAGER_URL", "http://127.0.0.1:8001/api/smgr")
 SERVICE_ROOT_URL = os.getenv("SERVICE_ROOT_URL", "http://127.0.0.1:8001")
 ANALYSIS_MANAGER_URL = os.getenv(
     "ANALYSIS_MANAGER_URL", "http://127.0.0.1:8001/api/analysis"
@@ -48,6 +48,43 @@ class process:
             """
             return auto(
                 requests.get(f"{PROCESS_MANAGER_URL}/algorithms/{id_or_prefix}")
+            )
+
+        @staticmethod
+        def update(
+            id_or_prefix: str,
+            version: str = None,
+            description: str = None,
+            base_on: str = None,
+            ignores: list[str] = None,
+        ) -> dict:
+            """Update an existing algorithm's metadata (without re-uploading files)
+
+            Fetches the current algorithm, merges the provided optional fields,
+            then sends the full algorithm back to the server.
+
+            Args:
+                id_or_prefix: Algorithm ID or prefix
+                version: Version string for this algorithm
+                description: Description of the algorithm
+                base_on: Base algorithm this one is built upon
+                ignores: List of ignore rules
+            """
+            existing = __class__.info(id_or_prefix)
+            existing.pop("tree", None)
+            if version is not None:
+                existing["version"] = version
+            if description is not None:
+                existing["description"] = description
+            if base_on is not None:
+                existing["base_on"] = base_on
+            if ignores is not None:
+                existing["ignores"] = ignores
+            return auto(
+                requests.put(
+                    f"{PROCESS_MANAGER_URL}/algorithms/{id_or_prefix}",
+                    json=existing,
+                )
             )
 
         @staticmethod
@@ -139,6 +176,7 @@ class process:
             restart_interval_seconds: float = 10,
             bind_listener: bool = False,
             rules: list[dict[str, float | str | int | bool]] = [],
+            tags: set[str] = set(),
         ) -> dict:
             """Create a new template from an algorithm
 
@@ -152,6 +190,7 @@ class process:
                 restart_interval_seconds: Wait seconds before restart
                 bind_listener: Always bind proxy to first LISTEN port
                 rules: List of environment rules
+                tags: Set of tags to attach to the template
             """
             return auto(
                 requests.post(
@@ -166,7 +205,55 @@ class process:
                         "restart_interval_seconds": restart_interval_seconds,
                         "bind_listener": bind_listener,
                         "rules": rules,
+                        "tags": list(tags),
                     },
+                )
+            )
+
+        @staticmethod
+        def update(
+            id_or_prefix: str,
+            entry: str = None,
+            restart_always: bool = None,
+            restart_interval_seconds: float = None,
+            volume: bool = None,
+            bind_listener: bool = None,
+            rules: list[dict[str, float | str | int | bool]] = None,
+            tags: set[str] = None,
+        ) -> dict:
+            """Update an existing template's configuration
+
+            Fetches the current template, merges the provided optional fields,
+            then sends the full template back to the server.
+
+            Args:
+                id_or_prefix: Template ID or prefix
+                entry: Command to run when starting the instance
+                restart_always: Always restart when process exits
+                restart_interval_seconds: Wait seconds before restart
+                volume: Use persistent volume for this template
+                bind_listener: Always bind proxy to first LISTEN port
+                rules: List of environment rules
+                tags: Set of tags to attach to the template
+            """
+            existing = __class__.info(id_or_prefix)
+            if entry is not None:
+                existing["entry"] = entry
+            if restart_always is not None:
+                existing["restart_always"] = restart_always
+            if restart_interval_seconds is not None:
+                existing["restart_interval_seconds"] = restart_interval_seconds
+            if volume is not None:
+                existing["volume"] = volume
+            if bind_listener is not None:
+                existing["bind_listener"] = bind_listener
+            if rules is not None:
+                existing["rules"] = rules
+            if tags is not None:
+                existing["tags"] = list(tags)
+            return auto(
+                requests.put(
+                    f"{PROCESS_MANAGER_URL}/templates/{id_or_prefix}", json=existing
                 )
             )
 

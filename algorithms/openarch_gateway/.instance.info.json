@@ -11,5 +11,60 @@
     "restart_interval_seconds": 10.0,
     "volume": true,
     "bind_listener": false,
-    "rules": []
+    "rules": [
+        {
+            "name": "smgr",
+            "order": 1,
+            "rule_type": "PREFIX",
+            "pattern": "/api/smgr",
+            "dest_index": [
+                1
+            ],
+            "dest_format": "/api/smgr%s",
+            "rewrite_host": null,
+            "editable": true,
+            "timeout": null,
+            "enable": true,
+            "file_serve_root_path": null,
+            "default_entrance": "/api/smgr/index.html",
+            "cors": false,
+            "file_serve_fallback": null
+        },
+        {
+            "name": "file",
+            "order": 1,
+            "rule_type": "REGEX",
+            "pattern": "/file(.*)",
+            "dest_index": [
+                0
+            ],
+            "dest_format": ".%s",
+            "rewrite_host": null,
+            "editable": true,
+            "timeout": null,
+            "enable": true,
+            "file_serve_root_path": "../",
+            "default_entrance": "/file/index.html",
+            "cors": false,
+            "file_serve_fallback": null
+        },
+        {
+            "name": "pmgr",
+            "order": 1,
+            "rule_type": "PREFIX",
+            "pattern": "/api/pmgr",
+            "dest_index": [
+                1
+            ],
+            "dest_format": "%s",
+            "rewrite_host": "127.0.0.1:8000",
+            "editable": true,
+            "timeout": null,
+            "enable": true,
+            "file_serve_root_path": null,
+            "default_entrance": "/api/pmgr/index.html",
+            "cors": false,
+            "file_serve_fallback": null
+        }
+    ]
 }

@@ -391,6 +391,15 @@ class ProcessManager:
         instance.status = InstanceStatus.RUNNING
         instance.start_time = datetime.now()
 
+    async def start_instance(self, id_or_prefix: str) -> str:
+        instance = self.get_instance(id_or_prefix)
+        if not isinstance(instance, Instance):
+            raise KeyError(instance)
+        if "0" in self.processes[instance.id]:
+            return instance.id
+        await self.exec(instance.id)
+        return instance.id
+
     async def get_log_out(
         self, instance_id_or_prefix: str, encoding: str = "utf-8"
     ) -> str:
@@ -497,6 +506,15 @@ class ProcessManager:
             self.temp_template_manager.add(template)
         return template
 
+    def update_template(self, id_or_prefix: str, template: Template) -> Template:
+        existing = self.get_template(id_or_prefix)
+        if not isinstance(existing, Template):
+            raise KeyError(existing)
+        for field, value in template.model_dump(exclude={"id"}).items():
+            setattr(existing, field, value)
+        existing.save()
+        return existing
+
     def get_template(self, id_or_prefix: str) -> list[str] | Template | None:
         starts_with = list[str]()
         filenames = os.listdir(Config.template_root_path)
@@ -515,6 +533,15 @@ class ProcessManager:
             return self.temp_template_manager.get(id_or_prefix)
         else:
             return starts_with
+
+    def update_algorithm(self, id_or_prefix: str, algorithm: Algorithm) -> Algorithm:
+        existing = self.get_algorithm(id_or_prefix)
+        if not isinstance(existing, Algorithm):
+            raise KeyError(existing)
+        for field, value in algorithm.model_dump(exclude={"id"}).items():
+            setattr(existing, field, value)
+        existing.save()
+        return existing
 
     def get_algorithm(self, id_or_prefix: str) -> list[str] | Algorithm | None:
         starts_with = list[str]()

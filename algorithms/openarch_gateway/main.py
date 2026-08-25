@@ -26,7 +26,7 @@ PROXY_LOCK_PATH = os.path.abspath(
 EXPOSE_SERVICE_MANAGER = get_bool_env_strict(
     os.environ.get("EXPOSE_SERVICE_MANAGER", "true")
 )
-SERVICE_MANAGER_API = os.environ.get("SERVICE_MANAGER_API", "/smgr")
+SERVICE_MANAGER_API = os.environ.get("SERVICE_MANAGER_API", "/api/smgr")
 
 
 class PathRequest(BaseModel):

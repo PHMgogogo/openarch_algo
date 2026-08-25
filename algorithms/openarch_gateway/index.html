@@ -455,7 +455,7 @@
         // 加载规则列表
         async function loadRules() {
             try {
-                const response = await fetch('/smgr/rules');
+                const response = await fetch('/api/smgr/rules');
                 if (!response.ok) throw new Error('加载规则失败');
                 rules = await response.json();
                 renderRulesTable();
@@ -599,14 +599,14 @@
                 let response;
                 if (editingRule) {
                     // 更新规则
-                    response = await fetch('/smgr/rules', {
+                    response = await fetch('/api/smgr/rules', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(ruleData)
                     });
                 } else {
                     // 添加规则
-                    response = await fetch('/smgr/rules', {
+                    response = await fetch('/api/smgr/rules', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(ruleData)
@@ -660,7 +660,7 @@
 
                 const testHost = testHostInput || location.host;
 
-                const response = await fetch('/smgr/rules/test', {
+                const response = await fetch('/api/smgr/rules/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -701,7 +701,7 @@
             if (!result.isConfirmed) return;
 
             try {
-                const response = await fetch(`/smgr/rules/${name}`, { method: 'DELETE' });
+                const response = await fetch(`/api/smgr/rules/${name}`, { method: 'DELETE' });
                 if (!response.ok) throw new Error('删除失败');
 
                 Swal.fire({
@@ -732,7 +732,7 @@
             }
 
             try {
-                const response = await fetch('/smgr/rules/match', {
+                const response = await fetch('/api/smgr/rules/match', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ path: path })
