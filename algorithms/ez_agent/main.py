@@ -3,7 +3,6 @@ import requests
 from typing import Any, TypeAlias, Literal, AsyncGenerator
 import os
 from dotenv import load_dotenv
-import openai
 import asyncio
 from rich.live import Live
 from rich.text import Text
@@ -14,9 +13,23 @@ from fastapi.responses import (
     JSONResponse,
     PlainTextResponse,
 )
-from pydantic import BaseModel
-import json
-from typing_extensions import TypedDict
+from pydantic import BaseModel, Field
+from agents import (
+    OpenAIProvider,
+    TResponseInputItem,
+    FunctionTool,
+    Agent,
+    Runner,
+    RunConfig,
+    ModelSettings,
+    AgentsException,
+    function_tool,
+    RunContextWrapper,
+)
+from openai.types.shared.reasoning import Reasoning
+import traceback
+from typing import Annotated, Union
+from dataclasses import dataclass
 
 EXECUTE_OUTPUT_MAX_LEN = 10240
 
@@ -39,367 +52,304 @@ def dynamic_load_client(
 dynamic_load_client()
 import client
 
+load_dotenv()
+
 
 class LLMConfig:
-    instance: LLMConfig
+    model: str
+    provider: OpenAIProvider
 
-    def __init__(self):
-        load_dotenv()
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        self.base_url = os.getenv("OPENAI_BASE_URL")
-        self.model_name = os.getenv("OPENAI_MODEL_NAME")
+    def __init__(
+        self,
+        model: str = os.getenv("OPENAI_DEFAULT_MODEL", os.getenv("OPENAI_MODEL_NAME")),
+        api_key: str = os.getenv("OPENAI_API_KEY"),
+        base_url: str = os.getenv("OPENAI_BASE_URL"),
+    ):
+        self.model = model
+        self.provider = OpenAIProvider(api_key=api_key, base_url=base_url)
 
-
-LLMConfig.instance = LLMConfig()
-
-
-class TextContent(TypedDict):
-    text: str = ""
-    type: Literal["input_text"] = "input_text"
-
-
-class ImageContent(TypedDict):
-    image_url: str = ""
-    type: Literal["input_image"] = "input_image"
+    def reasoning_settings(self) -> ModelSettings | None:
+        effort = os.getenv("OPENAI_REASONING_EFFORT", "none")
+        if effort == "none":
+            return None
+        return ModelSettings(reasoning=Reasoning(effort=effort))
 
 
-def text_content(item) -> TextContent:
-    return TextContent(text=item, type="input_text")
+DEFAULT_LLM_CONFIG = LLMConfig()
 
 
-def image_content(item) -> ImageContent:
-    return ImageContent(image_url=item, type="input_image")
+class OutputEvent(BaseModel):
+    event: Literal["output"]
+    data_type: str
+    value: str
 
 
-class ContextItem(TypedDict):
-    role: Literal["user", "assistant", "system"] = "system"
-    content: list[TextContent | ImageContent] = None
+class ReasoningEvent(BaseModel):
+    event: Literal["reasoning"]
+    data_type: str
+    value: str
 
 
-class FunctionCallContextItem(TypedDict):
-    type: Literal["function_call"] = "function_call"
-    name: str
-    arguments: str | dict
-    call_id: str
+class ContentEvent(BaseModel):
+    event: Literal["content"]
+    data_type: str
+    value: dict
 
 
-class FunctionCallOutputContextItem(TypedDict):
-    type: Literal["function_call_output"] = "function_call_output"
-    call_id: str
-    output: str
+class HistoryEvent(BaseModel):
+    event: Literal["history"]
+    data_type: str
+    value: list[dict]
 
 
-Context: TypeAlias = list[
-    ContextItem | FunctionCallContextItem | FunctionCallOutputContextItem
+@dataclass
+class AgentContext:
+    value: list | dict | None = None
+    changed: bool = False
+
+
+class ContextEvent(BaseModel):
+    event: Literal["context"]
+    data_type: str
+    value: Any
+
+
+RunEvent = Annotated[
+    Union[OutputEvent, ReasoningEvent, ContentEvent, HistoryEvent, ContextEvent],
+    Field(discriminator="event"),
 ]
 
 
-class EzcliParams(BaseModel):
-    args: str = "-h"
+EVENT_TYPE: TypeAlias = Literal["output", "reasoning", "content", "history", "context"]
 
 
-def dump_to(context: Context, path: str = "dump.md"):
-    f = open(path, "w")
-
-    def tostr(obj):
-        if isinstance(obj, str):
-            return obj
-        elif isinstance(obj, list):
-            return "\n".join([tostr(item) for item in obj])
-        elif isinstance(obj, dict):
-            return "\n".join([k + ": " + tostr(v) for k, v in obj.items()])
-
-    for item in context:
-        f.write("---\n")
-        f.write(tostr(item))
-        f.write("\n")
+def run_event(
+    event: EVENT_TYPE,
+    data_type: str,
+    value: Any,
+) -> RunEvent:
+    cls = {
+        "output": OutputEvent,
+        "reasoning": ReasoningEvent,
+        "content": ContentEvent,
+        "history": HistoryEvent,
+        "context": ContextEvent,
+    }[event]
+    return cls(event=event, data_type=data_type, value=value)
 
 
-class Function(BaseModel):
-    arguments: dict | str | None = None
-    name: str | None = None
-    call_id: str | None = None
-
-
-class ToolCall(BaseModel):
-    index: int | None = 0
-    id: str | None = None
-    function: Function
-    type: Literal["function"] = "function"
-
-
-class OpenAITool(BaseModel):
-    type: Literal["function"] = "function"
-    name: str
-    description: str
-    parameters: openai.types.FunctionParameters
-    strict: bool = True
-
-
-class CallRequest(BaseModel):
-    args: str
-
-
-class CallResponse(BaseModel):
-    output: str
-    cat_content: TextContent | ImageContent | None
-
-
-tool = OpenAITool(
-    name="ezcli",
-    description="ezcli",
-    parameters=EzcliParams().model_json_schema(),
-)
-
-
-async def llm_response(
-    context: Context = None,
-    extra_body: dict[str, Any] = {"thinking": {"type": "disabled"}},
-    llm_config: LLMConfig = LLMConfig.instance,
-) -> AsyncGenerator[str | Function, None]:
-    if context is None:
-        context = [ContextItem("user", [text_content("hello")])]
-    oclient = openai.AsyncOpenAI(
-        api_key=llm_config.api_key, base_url=llm_config.base_url
+async def run_agent(
+    history: list[TResponseInputItem] = [{"role": "user", "content": "hello"}],
+    agent_name: str = "agent",
+    instructions: str = "",
+    tools: list[FunctionTool] = [],
+    agent_context: AgentContext = None,
+    ignore_events: set[EVENT_TYPE] = set(),
+    model: str = DEFAULT_LLM_CONFIG.model,
+    provider: OpenAIProvider = DEFAULT_LLM_CONFIG.provider,
+    output_type: type[BaseModel] = None,
+) -> AsyncGenerator[RunEvent, None]:
+    agent = Agent(
+        agent_name, instructions=instructions, tools=tools, output_type=output_type
     )
-    stream = await oclient.responses.create(
-        model=llm_config.model_name,
-        input=context,
-        stream=True,
-        extra_body=extra_body,
-        tools=[tool.model_dump()],
-        tool_choice="auto",
+    if agent_context is None:
+        agent_context = AgentContext()
+    result = Runner().run_streamed(
+        agent,
+        history,
+        run_config=RunConfig(
+            tracing_disabled=True,
+            model=model,
+            model_provider=provider,
+            model_settings=DEFAULT_LLM_CONFIG.reasoning_settings(),
+        ),
+        context=agent_context,
     )
-    async for event in stream:
-        if event.type == "response.output_text.delta":
-            yield event.delta
-        elif event.type == "response.output_item.done":
-            if event.item.type == "function_call":
-                yield Function(
-                    name=event.item.name,
-                    call_id=event.item.call_id,
-                    arguments=json.loads(event.item.arguments),
-                )
+    try:
+        async for event in result.stream_events():
+            if event.type == "raw_response_event":
+                data = event.data
+                if data.type in ("response.reasoning_text.delta", "response.reasoning_summary_text.delta"):
+                    if "reasoning" in ignore_events:
+                        continue
+                    event = run_event("reasoning", event.data.type, data.delta)
+                    yield event
+                elif data.type == "response.output_text.delta":
+                    if "output" in ignore_events:
+                        continue
+                    event = run_event("output", event.data.type, data.delta)
+                    yield event
+            elif event.type == "run_item_stream_event":
+                data = event.item.to_input_item()
+                if "content" in ignore_events:
+                    continue
+                event = run_event("content", event.name, data)
+                yield event
+            if agent_context.changed:
+                agent_context.changed = False
+                if "context" in ignore_events:
+                    continue
+                event = run_event("context", "context", agent_context.value)
+                yield event
+    except AgentsException:
+        exception_content = {
+            "role": "system",
+            "content": f"Agent Exception:\n{traceback.format_exc()}",
+        }
+        final_history = result.to_input_list()
+        final_history.append(exception_content)
+        event = run_event("content", "exception", exception_content)
+        if "content" not in ignore_events:
+            yield event
+    else:
+        final_history = result.to_input_list()
+    if "history" not in ignore_events:
+        event = run_event("history", "done", final_history)
+        yield event
 
 
-def add_context_to(
-    context: Context = None,
-    role: Literal["system", "assistant", "user", "tool"] = "system",
-    content: list[TextContent | ImageContent] = None,
-    copy: bool = False,
-) -> Context:
-    if context is None:
-        context = []
-    elif copy:
-        context = context.copy()
-    citem = ContextItem(role=role, content=content)
-    context.append(citem)
-    return context
+@function_tool
+async def ezcli(rcw: RunContextWrapper[AgentContext], command: str) -> str:
+    """
+    Invoke ezcli tool to interact with platform.
 
-
-def add_f_context_to(
-    context: Context = None,
-    name: str = "",
-    arguments: str = "",
-    call_id: str = "",
-    content: str = "",
-    copy: bool = False,
-) -> Context:
-    if context is None:
-        context = []
-    elif copy:
-        context = context.copy()
-    citem = FunctionCallContextItem(
-        type="function_call", name=name, arguments=arguments, call_id=call_id
-    )
-    context.append(citem)
-    citem = FunctionCallOutputContextItem(
-        type="function_call_output", call_id=call_id, output=content
-    )
-    context.append(citem)
-    return context
-
-
-def load_prompt_to(
-    context: Context = None, path: str = "./PROMPT.md", ezcli_doc: str = None
-) -> Context:
-    prompt = open(path, encoding="utf-8").read()
-    prompt = prompt.replace("{{EZCLI_DOC}}", ezcli_doc)
-    open("ezcli_doc.md", "w", encoding="utf-8").write(ezcli_doc)
-    return add_context_to(context, "system", [text_content(prompt)])
-
-
-async def _ezcli_call(name: str, args: str) -> tuple[str, TextContent | ImageContent]:
-    cat_content = None
-    tool_output = ""
-    cmd = f"python client.py {args}"
+    The command is the arguments after ezcli,
+    e.g. root@SOME_PLATFORM:~/# ezcli {{command}}
+    """
+    cmd = f"python client.py {command}"
     env = os.environ.copy()
     env.update({"PYTHONENCODING": "utf-8", "PYTHONUTF8": "1"})
     proc = await asyncio.create_subprocess_shell(
         cmd,
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        limit=1024 * 1024 * 20,  # 20MB
+        stderr=asyncio.subprocess.STDOUT,
+        limit=EXECUTE_OUTPUT_MAX_LEN,
         env=env,
     )
-    stdout_data, stderr_data = await proc.communicate()
-    if proc.returncode == 0:
-        if stdout_data is not None:
-            stdout_str = stdout_data.decode("utf-8")
-            is_cat = False
-            try:
-                out_obj = json.loads(stdout_str)
-                file_type = out_obj.get("file_type")
-                if file_type in ["image", "text"]:
-                    is_cat = True
-                    data = out_obj["chunk_content"]
-                    del out_obj["chunk_content"]
-                    tool_output += json.dumps(out_obj)
-                    if file_type == "image":
-                        cat_content = image_content(data)
-                    else:
-                        cat_content = text_content(data[-EXECUTE_OUTPUT_MAX_LEN:])
-            except:
-                pass
-            if not is_cat:
-                tool_output += stdout_str[-EXECUTE_OUTPUT_MAX_LEN:]
-    else:
-        if stderr_data is not None:
-            stderr_str = stderr_data.decode("utf-8")
-            tool_output += stderr_str[-EXECUTE_OUTPUT_MAX_LEN:]
-    return tool_output, cat_content
+    stdout_data, _ = await proc.communicate()
+    stdout_str = stdout_data.decode("utf-8") if stdout_data is not None else ""
+    return stdout_str
 
 
-async def _single_progress(
-    user_input: str, context: Context = None
-) -> AsyncGenerator[tuple[str, str, Context], None]:
-    context = add_context_to(context, "user", [text_content(user_input)])
-    dump_to(context)
-    yield None, None, context
-    output_str: str = ""
-    should_response_again: bool = True
-    while should_response_again:
-        context_str: str = ""
-        delta_str: str = ""
-        should_response_again = False
-        async for delta in llm_response(context):
-            if isinstance(delta, Function):
-                func = delta
-                if not func.name == "ezcli":
-                    continue
-                tool_output: str = ""
-                args = EzcliParams.model_validate(func.arguments).args
-                should_response_again = True
-                raw_cmd = func.name + " " + args
-                delta_str = f"\n**已调用** `{raw_cmd}`\n\n"
-                output_str += delta_str
-                yield output_str, delta_str, context
-                add_context_to(context, "assistant", [text_content(context_str)])
-                tool_output, cat_content = await _ezcli_call(func.name, args)
-                add_f_context_to(
-                    context, func.name, func.arguments, func.call_id, tool_output
-                )
-                yield None, None, context
-                if cat_content is not None:
-                    add_context_to(
-                        context,
-                        "system",
-                        [text_content("所查看的文件内容如下："), cat_content],
-                    )
-            else:
-                delta_str = delta
-                context_str += delta_str
-                output_str += delta_str
-                yield output_str, delta_str, context
-        if not should_response_again:
-            context = add_context_to(context, "assistant", [text_content(output_str)])
-            yield None, None, context
-        dump_to(context)
+def get_instructions(path: str = "./PROMPT.md") -> str:
+    prompt = open(path, encoding="utf-8").read()
+    prompt = prompt.replace("{{EZCLI_DOC}}", client.doc("ezcli"))
+    return prompt
 
 
-async def single_progress(user_input: str, context: Context = None) -> None:
-    history = []
+INSTRUCTIONS = get_instructions()
+
+
+def ez_run_agent(user_input: str, history: list[dict] = None):
+    if history is None:
+        history = []
+    return run_agent(
+        history=history + [{"role": "user", "content": user_input}],
+        agent_name="ezagent",
+        instructions=INSTRUCTIONS,
+        tools=[ezcli],
+        model=DEFAULT_LLM_CONFIG.model,
+        provider=DEFAULT_LLM_CONFIG.provider,
+    )
+
+
+async def single_process(
+    user_input: str, history: list[TResponseInputItem] = None
+) -> list[TResponseInputItem]:
+    term_history = []
+    reasoning_history = []
     tail = []
+    reasoning_tail = []
+    printed_lines = 0
+    reasoning_printed_lines = 0
     TAIL_LINES = 20
+
     live = Live(refresh_per_second=20)
-
     with live:
-        async for output, delta, context in _single_progress(
-            user_input=user_input,
-            context=context,
-        ):
-            if not output:
-                continue
-
-            lines = output.splitlines()
-            if len(lines) > TAIL_LINES:
-                new_history = lines[:-TAIL_LINES]
-                if len(new_history) > len(history):
-                    for line in new_history[len(history) :]:
-                        live.console.print(line)
-
-                history = new_history
-                tail = lines[-TAIL_LINES:]
-            else:
-                tail = lines
-
-            live.update(Text("\n".join(tail)))
-
-
-def single_progress_headless(user_input: str, context: Context = None):
-    return _single_progress(user_input=user_input, context=context)
+        async for event in ez_run_agent(user_input, history):
+            if event.event == "output":
+                term_history.append(event.value)
+                lines = "".join(term_history).splitlines()
+                if len(lines) > TAIL_LINES:
+                    new_history = lines[:-TAIL_LINES]
+                    if len(new_history) > printed_lines:
+                        for line in new_history[printed_lines:]:
+                            live.console.print(line)
+                    printed_lines = len(new_history)
+                    tail = lines[-TAIL_LINES:]
+                else:
+                    tail = lines
+            elif event.event == "reasoning":
+                reasoning_history.append(event.value)
+                reasoning_lines = "".join(reasoning_history).splitlines()
+                if len(reasoning_lines) > TAIL_LINES:
+                    new_reasoning = reasoning_lines[:-TAIL_LINES]
+                    if len(new_reasoning) > reasoning_printed_lines:
+                        for line in new_reasoning[reasoning_printed_lines:]:
+                            live.console.print(f"[dim]{line}[/dim]")
+                    reasoning_printed_lines = len(new_reasoning)
+                    reasoning_tail = reasoning_lines[-TAIL_LINES:]
+                else:
+                    reasoning_tail = reasoning_lines
+            elif event.event == "content":
+                item = event.value
+                if isinstance(item, dict):
+                    item_type = item.get("type")
+                    if item_type == "function_call":
+                        name = item.get("name", "")
+                        args = item.get("arguments", "")
+                        live.console.print(f"[cyan]调用工具: {name}({args})[/cyan]")
+                    elif item_type == "function_call_output":
+                        output = item.get("output", "")
+                        live.console.print(f"[cyan]工具返回: {output}[/cyan]")
+            elif event.event == "history":
+                history = event.value
+            display = Text()
+            if reasoning_tail:
+                display.append("\n".join(reasoning_tail), style="dim")
+                display.append("\n")
+            if tail:
+                display.append("\n".join(tail))
+            live.update(display)
+    return history
 
 
 async def cli():
-    context = load_prompt_to(ezcli_doc=client.doc("ezcli"))
+    history = []
     while True:
         user_input = input("\nUser: ")
-        await single_progress(user_input, context)
+        history = await single_process(user_input, history)
 
 
 app = FastAPI()
 
 
 class InteractRequest(BaseModel):
-    context: Context = []
+    context: list[dict] = Field(default_factory=list)
     user_input: str
 
 
 @app.post("/interact")
 async def interact(i_request: InteractRequest):
-    if len(i_request.context) <= 0:
-        i_request.context = load_prompt_to(ezcli_doc=client.doc("ezcli"))
-
     async def generator():
-        async for output, delta, ctx in single_progress_headless(
-            i_request.user_input, i_request.context
-        ):
-            payload = ctx if not output else {"output": output}
-            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        async for event in ez_run_agent(i_request.user_input, i_request.context):
+            yield f"data: {event.model_dump_json()}\n\n"
 
     return StreamingResponse(generator(), media_type="text/event-stream")
 
 
 @app.post("/interact/tool")
-async def interact_tool(i_request: InteractRequest) -> ContextItem:
-    if len(i_request.context) <= 0:
-        i_request.context = load_prompt_to(ezcli_doc=client.doc("ezcli"))
-    async for output, delta, ctx in single_progress_headless(
-        i_request.user_input, i_request.context
-    ):
-        pass
-    return JSONResponse(content=ctx[-1])
+async def interact_tool(i_request: InteractRequest) -> dict:
+    history = []
+    async for event in ez_run_agent(i_request.user_input, i_request.context):
+        if event.event == "history":
+            history = event.value
+    return JSONResponse(content=history[-1])
 
 
 @app.get("/ezcli/doc")
 async def ezcli_doc() -> str:
     return PlainTextResponse(client.doc("ezcli"))
-
-
-@app.post("/ezcli/call")
-async def ezcli_call(creq: CallRequest) -> CallResponse:
-    output, content = await _ezcli_call("ezcli", creq.args)
-    return CallResponse(output=output, cat_content=content)
 
 
 @app.get("/")

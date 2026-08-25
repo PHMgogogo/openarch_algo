@@ -2,11 +2,13 @@ from agents import (
     Agent,
     Runner,
     RunConfig,
+    ModelSettings,
     TResponseInputItem,
     AgentsException,
     FunctionTool,
     OpenAIProvider,
 )
+from openai.types.shared.reasoning import Reasoning
 import traceback
 from typing import Any, Literal, Annotated, AsyncGenerator, Union, TypeAlias
 from pydantic import BaseModel, Field
@@ -29,6 +31,12 @@ class LLMConfig:
     ):
         self.model = model
         self.provider = OpenAIProvider(api_key=api_key, base_url=base_url)
+
+    def reasoning_settings(self) -> ModelSettings | None:
+        effort = os.getenv("OPENAI_REASONING_EFFORT", "none")
+        if effort == "none":
+            return None
+        return ModelSettings(reasoning=Reasoning(effort=effort))
 
 
 DEFAULT_LLM_CONFIG = LLMConfig()
@@ -114,7 +122,10 @@ async def run_agent(
         agent,
         history,
         run_config=RunConfig(
-            tracing_disabled=True, model=model, model_provider=provider
+            tracing_disabled=True,
+            model=model,
+            model_provider=provider,
+            model_settings=DEFAULT_LLM_CONFIG.reasoning_settings(),
         ),
         context=agent_context,
     )
@@ -122,7 +133,7 @@ async def run_agent(
         async for event in result.stream_events():
             if event.type == "raw_response_event":
                 data = event.data
-                if data.type == "response.reasoning_text.delta":
+                if data.type in ("response.reasoning_text.delta", "response.reasoning_summary_text.delta"):
                     if "reasoning" in ignore_events:
                         continue
                     event = run_event("reasoning", event.data.type, data.delta)
