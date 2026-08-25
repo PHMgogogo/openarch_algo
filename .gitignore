@@ -9,6 +9,7 @@ algorithms/*
 !algorithms/analysis_*
 !algorithms/open_pipeline
 algorithms/open_storage/storage/*
+algorithms/openarch_gateway/rules.json
 algorithms/ez_agent/.env
 algorithms/ez_agent/context.md
 algorithms/ez_agent/client.py
