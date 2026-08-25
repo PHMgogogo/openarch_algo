@@ -1,5 +1,5 @@
 {
     "id": "yolo_http_server",
     "version": "",
-    "description": ""
+    "description": "目标检测服务，基于 YOLO 模型提供图像目标检测与可视化标注能力，支持上传图片并返回检测框、置信度与类别信息。"
 }

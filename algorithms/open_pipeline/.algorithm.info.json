@@ -1,5 +1,5 @@
 {
     "id": "open_pipeline",
     "version": "",
-    "description": ""
+    "description": "流水线编排服务，提供节点（Node）与流水线（Pipeline）的定义、调度与执行能力，支持通过 Agent 自动编排数据处理与分析流程，并内置定时任务循环。"
 }

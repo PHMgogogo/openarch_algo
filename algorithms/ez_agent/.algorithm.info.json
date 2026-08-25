@@ -1,5 +1,5 @@
 {
     "id": "ez_agent",
     "version": "",
-    "description": ""
+    "description": "AI 智能代理服务，基于大语言模型通过工具调用（ezcli）自主完成平台操作任务，支持流式对话与多轮交互，提供 Web 聊天界面和 CLI 两种交互方式。"
 }

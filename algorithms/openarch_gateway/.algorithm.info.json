@@ -1,5 +1,5 @@
 {
     "id": "openarch_gateway",
     "version": "",
-    "description": ""
+    "description": "网关服务，基于反向代理实现请求路由与转发，支持动态配置路由规则，将不同前缀的请求分发到对应的算法实例，并提供服务管理接口。"
 }

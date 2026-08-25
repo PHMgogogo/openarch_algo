@@ -27,5 +27,8 @@
             "file_serve_root_path": null,
             "default_entrance": "/ezagent/index.html"
         }
+    ],
+    "tags": [
+        "system"
     ]
 }

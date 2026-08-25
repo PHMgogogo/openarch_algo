@@ -1,7 +1,7 @@
 {
     "id": "analysis_ml_afd",
     "version": "",
-    "description": "",
+    "description": "基于机器学习方法的异常检测算法，使用随机森林分类（RandomForestClassifier）对设备状态特征进行分类，判断是否存在异常，适用于有标签数据的异常/故障检测场景。",
     "base_on": "framework",
     "ignores": [
         "server.py",

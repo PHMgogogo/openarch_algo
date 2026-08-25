@@ -66,5 +66,8 @@
             "cors": false,
             "file_serve_fallback": null
         }
+    ],
+    "tags": [
+        "system"
     ]
 }

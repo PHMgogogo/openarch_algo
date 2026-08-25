@@ -1,7 +1,7 @@
 {
     "id": "analysis_stat_fp",
     "version": "",
-    "description": "",
+    "description": "基于统计方法的故障预测算法，使用向量自回归（VAR）模型对多变量时序数据进行建模，预测下一时刻状态并计算故障概率，适用于线性时序系统的故障预警。",
     "base_on": "framework",
     "ignores": [
         "server.py",

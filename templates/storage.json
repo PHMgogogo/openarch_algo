@@ -43,5 +43,8 @@
             "file_serve_root_path": "../open_storage/storage",
             "default_entrance": "/api/storage/docs"
         }
+    ],
+    "tags": [
+        "system"
     ]
 }

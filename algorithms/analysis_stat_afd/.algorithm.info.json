@@ -1,7 +1,7 @@
 {
     "id": "analysis_stat_afd",
     "version": "",
-    "description": "",
+    "description": "基于统计方法的异常检测算法，使用马氏距离（Mahalanobis Distance）度量样本与正常分布的偏离程度，输出归一化的异常评分，适用于无监督的异常点检测场景。",
     "base_on": "framework",
     "ignores": [
         "server.py",

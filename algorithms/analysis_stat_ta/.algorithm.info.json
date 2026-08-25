@@ -1,7 +1,7 @@
 {
     "id": "analysis_stat_ta",
     "version": "",
-    "description": "",
+    "description": "基于统计方法的趋势分析算法，使用线性回归（LinearRegression）对表格时序数据进行建模，预测下一时刻的趋势走向，适用于数据量较小、线性关系明显的趋势预测场景。",
     "base_on": "framework",
     "ignores": [
         "server.py",

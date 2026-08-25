@@ -29,5 +29,8 @@
             "default_entrance": "/ezagent/index.html",
             "cors": false
         }
+    ],
+    "tags": [
+        "system"
     ]
 }

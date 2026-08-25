@@ -11,5 +11,8 @@
     "restart_interval_seconds": 10.0,
     "bind_listener": true,
     "volume": false,
-    "rules": []
+    "rules": [],
+    "tags": [
+        "highlevel"
+    ]
 }

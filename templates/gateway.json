@@ -10,5 +10,8 @@
     "is_temporary": false,
     "restart_interval_seconds": 10.0,
     "volume": true,
-    "rules": []
+    "rules": [],
+    "tags": [
+        "system"
+    ]
 }

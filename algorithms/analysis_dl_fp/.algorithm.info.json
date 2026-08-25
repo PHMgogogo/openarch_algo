@@ -1,7 +1,7 @@
 {
     "id": "analysis_dl_fp",
     "version": "",
-    "description": "",
+    "description": "基于深度学习方法的故障预测算法，使用 Transformer 编码器对时序序列进行建模，预测下一时刻状态并额外输出故障预测值，能够捕捉复杂时序模式，适用于数据量较大的故障预警场景。",
     "base_on": "framework",
     "ignores": [
         "server.py",

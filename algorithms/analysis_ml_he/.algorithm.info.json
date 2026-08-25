@@ -1,7 +1,7 @@
 {
     "id": "analysis_ml_he",
     "version": "",
-    "description": "",
+    "description": "基于机器学习方法的健康评估算法，使用随机森林回归（RandomForestRegressor）对设备状态特征进行建模，输出健康评估指标，能够处理非线性关系与多特征输入。",
     "base_on": "framework",
     "ignores": [
         "server.py",

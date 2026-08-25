@@ -69,7 +69,6 @@ class InstanceResponse(BaseModel):
     start_time: Optional[str] = None
     stop_time: Optional[str] = None
     logs: dict
-    tree: dict
 
 
 class AlgorithmResponse(BaseModel):
@@ -143,7 +142,6 @@ async def get_instances():
                 if instance.stop_time
                 else None,
                 logs={"out": instance.log.out_path, "err": instance.log.err_path},
-                tree=instance.tree(),
             )
         )
     return instances
@@ -281,7 +279,6 @@ async def get_instance(instance_id: str):
         start_time=instance.start_time.isoformat() if instance.start_time else None,
         stop_time=instance.stop_time.isoformat() if instance.stop_time else None,
         logs={"out": instance.log.out_path, "err": instance.log.err_path},
-        tree=instance.tree(),
     )
 
 
@@ -339,7 +336,6 @@ async def start_instance(instance_id: str):
         start_time=instance.start_time.isoformat() if instance.start_time else None,
         stop_time=instance.stop_time.isoformat() if instance.stop_time else None,
         logs={"out": instance.log.out_path, "err": instance.log.err_path},
-        tree=instance.tree(),
     )
 
 
@@ -380,7 +376,6 @@ async def highlevel_create(
     template.algorithm = algo_info
     template.is_temporary = True
     template.id = uid
-    template.tags.add("highlevel")
     if template.rules is None:
         template.rules = []
     template.rules.append(

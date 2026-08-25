@@ -29,5 +29,8 @@
             "default_entrance": "/r2c2r/v1/models",
             "cors": false
         }
+    ],
+    "tags": [
+        "system"
     ]
 }

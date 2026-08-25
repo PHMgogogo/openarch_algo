@@ -1,5 +1,5 @@
 {
     "id": "open_storage",
     "version": "",
-    "description": ""
+    "description": "文件存储服务，提供文件上传、下载与静态文件访问能力，用于平台各类文件资源的统一存储与管理。"
 }

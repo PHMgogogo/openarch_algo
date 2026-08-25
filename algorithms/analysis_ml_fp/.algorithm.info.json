@@ -1,7 +1,7 @@
 {
     "id": "analysis_ml_fp",
     "version": "",
-    "description": "",
+    "description": "基于机器学习方法的故障预测算法，使用随机森林回归（RandomForestRegressor + MultiOutputRegressor）对时序数据进行建模，预测下一时刻状态并输出故障预测值，适用于非线性多变量系统的故障预警。",
     "base_on": "framework",
     "ignores": [
         "server.py",

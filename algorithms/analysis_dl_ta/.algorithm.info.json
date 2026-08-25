@@ -1,7 +1,7 @@
 {
     "id": "analysis_dl_ta",
     "version": "",
-    "description": "",
+    "description": "基于深度学习方法的趋势分析算法，使用 Transformer 编码器对时序序列进行建模，预测下一时刻的趋势走向，能够捕捉长距离依赖与复杂时序模式，适用于数据量较大的趋势预测场景。",
     "base_on": "framework",
     "ignores": [
         "server.py",

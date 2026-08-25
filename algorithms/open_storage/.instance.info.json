@@ -46,5 +46,8 @@
             "default_entrance": "/api/storage/docs",
             "cors": false
         }
+    ],
+    "tags": [
+        "system"
     ]
 }

@@ -1,7 +1,7 @@
 {
     "id": "analysis_dl_afd",
     "version": "",
-    "description": "",
+    "description": "基于深度学习方法的异常检测算法，使用多层感知机（MLP）对设备状态特征进行建模，通过 Sigmoid 输出异常概率，适用于复杂非线性系统的异常/故障检测场景。",
     "base_on": "framework",
     "ignores": [
         "server.py",

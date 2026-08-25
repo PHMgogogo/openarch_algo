@@ -1,7 +1,7 @@
 {
     "id": "analysis_ml_ta",
     "version": "",
-    "description": "",
+    "description": "基于机器学习方法的趋势分析算法，使用随机森林回归（RandomForestRegressor）对表格时序数据进行建模，预测下一时刻的趋势走向，能够处理非线性关系与多特征输入。",
     "base_on": "framework",
     "ignores": [
         "server.py",

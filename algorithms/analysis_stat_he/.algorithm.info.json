@@ -1,7 +1,7 @@
 {
     "id": "analysis_stat_he",
     "version": "",
-    "description": "",
+    "description": "基于统计方法的健康评估算法，使用线性回归（LinearRegression）对设备状态特征进行建模，输出健康评估指标，适用于线性关系明显的健康度量化评估场景。",
     "base_on": "framework",
     "ignores": [
         "server.py",

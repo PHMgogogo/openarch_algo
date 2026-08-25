@@ -1,7 +1,7 @@
 {
     "id": "analysis_dl_he",
     "version": "",
-    "description": "",
+    "description": "基于深度学习方法的健康评估算法，使用多层感知机（MLP）对设备状态特征进行建模，通过 Sigmoid 输出 0-1 之间的健康评分，适用于复杂非线性健康度量化评估场景。",
     "base_on": "framework",
     "ignores": [
         "server.py",

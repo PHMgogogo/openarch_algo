@@ -1,5 +1,5 @@
 {
     "id": "r2c2r",
     "version": "",
-    "description": ""
+    "description": "Codex 中继代理服务，将请求转发到上游 Codex 服务，为平台提供基于 Codex 的代码生成与推理能力。"
 }

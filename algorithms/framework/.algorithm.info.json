@@ -1,7 +1,7 @@
 {
     "id": "framework",
     "version": "",
-    "description": "",
+    "description": "通用机器学习/深度学习训练与推理服务框架，提供基于 PyTorch 的模型加载、训练、推理、保存与卸载等标准化 HTTP 接口，并内置表格数据（CSV）数据集封装与训练/评估流程，是各类 analysis_* 分析算法的基础底座。",
     "base_on": "",
     "ignores": [
         "__pycache__"

@@ -47,5 +47,7 @@
             "cors": false
         }
     ],
-    "tags": []
+    "tags": [
+        "system"
+    ]
 }
