@@ -1,5 +1,7 @@
 {
   "name": "",
+  "cron_expr": "",
+  "cron_enable": false,
   "id": "example",
   "nodes": {
     "raw": {
@@ -16,13 +18,24 @@
       "order": 0,
       "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "text_csv": "x,y\n1,3\n2,6\n3,7\n4,9\n",
-        "with_header": true,
-        "overwrite_header": false
+      "in_parameters": {
+        "text_csv": {
+          "constant": "x,y\n1,3\n2,6\n3,7\n4,9\n",
+          "state": null,
+          "mode": "constant"
+        },
+        "with_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "overwrite_header": {
+          "constant": false,
+          "state": null,
+          "mode": "constant"
+        }
       },
+      "out_parameters": {},
       "category": "INPUT"
     },
     "pred": {
@@ -38,13 +51,24 @@
       "order": 0,
       "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "text_csv": "pred_x\n5\n6\n7\n8\n",
-        "with_header": true,
-        "overwrite_header": false
+      "in_parameters": {
+        "text_csv": {
+          "constant": "pred_x\n5\n6\n7\n8\n",
+          "state": null,
+          "mode": "constant"
+        },
+        "with_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "overwrite_header": {
+          "constant": false,
+          "state": null,
+          "mode": "constant"
+        }
       },
+      "out_parameters": {},
       "category": "INPUT"
     },
     "ols": {
@@ -58,7 +82,7 @@
       "prev": [
         "raw"
       ],
-      "x": 250.0,
+      "x": 300.0,
       "y": 0.0,
       "order": 1,
       "read_data": [
@@ -66,12 +90,11 @@
         "y"
       ],
       "write_data": [],
-      "read_state": [],
-      "write_state": [
-        "k",
-        "b"
-      ],
-      "parameters": {},
+      "in_parameters": {},
+      "out_parameters": {
+        "k": "k",
+        "b": "b"
+      },
       "category": "REGRESSION"
     },
     "pearson": {
@@ -84,7 +107,7 @@
       "prev": [
         "raw"
       ],
-      "x": 250.0,
+      "x": 300.0,
       "y": 100.0,
       "order": 1,
       "read_data": [
@@ -92,39 +115,38 @@
         "y"
       ],
       "write_data": [],
-      "read_state": [],
-      "write_state": [
-        "rho"
-      ],
-      "parameters": {},
+      "in_parameters": {},
+      "out_parameters": {
+        "rho": "rho"
+      },
       "category": "BY_COLUMN"
     },
     "k_b": {
       "id": "k_b",
-      "node_type": "StateOutputNode",
+      "node_type": "OutputNode",
       "title": null,
       "next": [],
       "prev": [
         "ols"
       ],
-      "x": 500.0,
+      "x": 600.0,
       "y": 0.0,
       "order": 2,
       "read_data": [],
       "write_data": [],
-      "read_state": [
-        "k",
-        "b"
-      ],
-      "write_state": [],
-      "parameters": {
-        "prefix": "State Output: "
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "OLS 回归结果：斜率 k = {{ state.k }}，截距 b = {{ state.b }}",
+          "state": null,
+          "mode": "constant"
+        }
       },
+      "out_parameters": {},
       "category": "OUTPUT"
     },
     "kx": {
       "id": "kx",
-      "node_type": "MultiplyStateKNode",
+      "node_type": "MultiplyNode",
       "title": null,
       "next": [
         "kx_out",
@@ -134,7 +156,7 @@
         "pred",
         "ols"
       ],
-      "x": 500.0,
+      "x": 600.0,
       "y": 100.0,
       "order": 2,
       "read_data": [
@@ -143,60 +165,65 @@
       "write_data": [
         "pred_y"
       ],
-      "read_state": [
-        "k"
-      ],
-      "write_state": [],
-      "parameters": {},
+      "in_parameters": {
+        "k": {
+          "constant": null,
+          "state": "k",
+          "mode": "state"
+        }
+      },
+      "out_parameters": {},
       "category": "BY_ROW"
     },
     "rho": {
       "id": "rho",
-      "node_type": "StateOutputNode",
+      "node_type": "OutputNode",
       "title": null,
       "next": [],
       "prev": [
         "pearson"
       ],
-      "x": 500.0,
+      "x": 600.0,
       "y": 200.0,
       "order": 2,
       "read_data": [],
       "write_data": [],
-      "read_state": [
-        "rho"
-      ],
-      "write_state": [],
-      "parameters": {
-        "prefix": "State Output: "
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "Pearson 相关系数：rho = {{ state.rho }}",
+          "state": null,
+          "mode": "constant"
+        }
       },
+      "out_parameters": {},
       "category": "OUTPUT"
     },
     "kx_out": {
       "id": "kx_out",
-      "node_type": "DataOutputNode",
+      "node_type": "OutputNode",
       "title": null,
       "next": [],
       "prev": [
         "kx"
       ],
-      "x": 750.0,
+      "x": 900.0,
       "y": 0.0,
       "order": 3,
-      "read_data": [
-        "pred_y"
-      ],
+      "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "prefix": "Data Output: "
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "中间预测结果（y = k * x）：{{ data.pred_y }}",
+          "state": null,
+          "mode": "constant"
+        }
       },
+      "out_parameters": {},
       "category": "OUTPUT"
     },
     "kx_b": {
       "id": "kx_b",
-      "node_type": "AddStateKNode",
+      "node_type": "AddNode",
       "title": null,
       "next": [
         "kx_b_out"
@@ -204,7 +231,7 @@
       "prev": [
         "kx"
       ],
-      "x": 750.0,
+      "x": 900.0,
       "y": 100.0,
       "order": 3,
       "read_data": [
@@ -213,33 +240,37 @@
       "write_data": [
         "pred_y"
       ],
-      "read_state": [
-        "b"
-      ],
-      "write_state": [],
-      "parameters": {},
+      "in_parameters": {
+        "k": {
+          "constant": null,
+          "state": "b",
+          "mode": "state"
+        }
+      },
+      "out_parameters": {},
       "category": "BY_ROW"
     },
     "kx_b_out": {
       "id": "kx_b_out",
-      "node_type": "DataOutputNode",
+      "node_type": "OutputNode",
       "title": null,
       "next": [],
       "prev": [
         "kx_b"
       ],
-      "x": 1000.0,
+      "x": 1200.0,
       "y": 0.0,
       "order": 4,
-      "read_data": [
-        "pred_y"
-      ],
+      "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "prefix": "Data Output: "
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "最终预测结果（y = k * x + b）：{{ data.pred_y }}",
+          "state": null,
+          "mode": "constant"
+        }
       },
+      "out_parameters": {},
       "category": "OUTPUT"
     }
   },

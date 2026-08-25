@@ -15,14 +15,24 @@
       "order": -1,
       "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "text_csv": "x,y\n1,2\n3,4\n5,6\n7,8\n9,10",
-        "with_header": true,
-        "overwrite_header": false
-      },
-      "category": "INPUT"
+      "category": "INPUT",
+      "in_parameters": {
+        "text_csv": {
+          "constant": "x,y\n1,2\n3,4\n5,6\n7,8\n9,10",
+          "state": null,
+          "mode": "constant"
+        },
+        "with_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "overwrite_header": {
+          "constant": false,
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "0ca76977-c758-4138-899e-a8acd954d2c7": {
       "id": "0ca76977-c758-4138-899e-a8acd954d2c7",
@@ -43,16 +53,18 @@
       "write_data": [
         "x_pred"
       ],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "instance": "1ac4d2ea-558a-43de-b8cc-dd6d46037b80"
-      },
-      "category": "REMOTE"
+      "category": "REMOTE",
+      "in_parameters": {
+        "instance": {
+          "constant": "1ac4d2ea-558a-43de-b8cc-dd6d46037b80",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "47bc03cf-1d05-4de3-8015-21948267f18e": {
       "id": "47bc03cf-1d05-4de3-8015-21948267f18e",
-      "node_type": "DataOutputNode",
+      "node_type": "OutputNode",
       "title": "output",
       "next": [],
       "prev": [
@@ -61,18 +73,16 @@
       "x": 300.0,
       "y": 0.0,
       "order": 1,
-      "read_data": [
-        "x",
-        "y",
-        "x_pred"
-      ],
+      "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "prefix": "Data Output: "
-      },
-      "category": "OUTPUT"
+      "category": "OUTPUT",
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "Data Output: {{ data }}",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     }
   },
   "return_data": [],

@@ -17,18 +17,28 @@
       "order": 0,
       "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "text_csv": "x,y\n1,2\n3,4\n5,6\n",
-        "with_header": true,
-        "overwrite_header": false
-      },
-      "category": "INPUT"
+      "category": "INPUT",
+      "in_parameters": {
+        "text_csv": {
+          "constant": "x,y\n1,2\n3,4\n5,6\n",
+          "state": null,
+          "mode": "constant"
+        },
+        "with_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "overwrite_header": {
+          "constant": false,
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "out": {
       "id": "out",
-      "node_type": "DataOutputNode",
+      "node_type": "OutputNode",
       "title": null,
       "next": [],
       "prev": [
@@ -37,17 +47,16 @@
       "x": 300.0,
       "y": 0.0,
       "order": 1,
-      "read_data": [
-        "x",
-        "y"
-      ],
+      "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "prefix": "Data Output: "
-      },
-      "category": "OUTPUT"
+      "category": "OUTPUT",
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "Data Output: {{ data }}",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     }
   },
   "return_data": [

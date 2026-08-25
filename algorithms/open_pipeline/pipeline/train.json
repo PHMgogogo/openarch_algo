@@ -19,18 +19,28 @@
         "x",
         "y"
       ],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "text_csv": "x,y\n1,3\n2,6\n3,7\n4,9\n",
-        "with_header": true,
-        "overwrite_header": true
-      },
-      "category": "INPUT"
+      "category": "INPUT",
+      "in_parameters": {
+        "text_csv": {
+          "constant": "x,y\n1,3\n2,6\n3,7\n4,9\n",
+          "state": null,
+          "mode": "constant"
+        },
+        "with_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "overwrite_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "c8a10793-bc6d-4aa7-af44-372d25fe29cf": {
       "id": "c8a10793-bc6d-4aa7-af44-372d25fe29cf",
-      "node_type": "DataOutputNode",
+      "node_type": "OutputNode",
       "title": "data_output",
       "next": [],
       "prev": [
@@ -40,18 +50,16 @@
       "x": 229.0,
       "y": -201.0,
       "order": 2,
-      "read_data": [
-        "pred_y",
-        "x",
-        "y"
-      ],
+      "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "prefix": "Data Output: "
-      },
-      "category": "OUTPUT"
+      "category": "OUTPUT",
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "Data Output: {{ data }}",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "86895618-9e4c-460b-9391-d1b8ab17f2c7": {
       "id": "86895618-9e4c-460b-9391-d1b8ab17f2c7",
@@ -74,28 +82,55 @@
       "write_data": [
         "pred_y"
       ],
-      "read_state": [],
-      "write_state": [
-        "loss"
-      ],
-      "parameters": {
-        "instance": "1ac4d2ea-558a-43de-b8cc-dd6d46037b80",
-        "epoch": 1,
-        "learning_rate": 0.001,
-        "batch_size": 1,
-        "device": "cpu",
-        "data_cols": [
-          "x"
-        ],
-        "label_cols": [
-          "y"
-        ]
+      "category": "REMOTE",
+      "in_parameters": {
+        "instance": {
+          "constant": "1ac4d2ea-558a-43de-b8cc-dd6d46037b80",
+          "state": null,
+          "mode": "constant"
+        },
+        "epoch": {
+          "constant": 1,
+          "state": null,
+          "mode": "constant"
+        },
+        "learning_rate": {
+          "constant": 0.001,
+          "state": null,
+          "mode": "constant"
+        },
+        "batch_size": {
+          "constant": 1,
+          "state": null,
+          "mode": "constant"
+        },
+        "device": {
+          "constant": "cpu",
+          "state": null,
+          "mode": "constant"
+        },
+        "data_cols": {
+          "constant": [
+            "x"
+          ],
+          "state": null,
+          "mode": "constant"
+        },
+        "label_cols": {
+          "constant": [
+            "y"
+          ],
+          "state": null,
+          "mode": "constant"
+        }
       },
-      "category": "REMOTE"
+      "out_parameters": {
+        "loss": "loss"
+      }
     },
     "d6101a1f-e476-4c35-b44f-7bdc5dcb2e5d": {
       "id": "d6101a1f-e476-4c35-b44f-7bdc5dcb2e5d",
-      "node_type": "StateOutputNode",
+      "node_type": "OutputNode",
       "title": "state_output",
       "next": [],
       "prev": [
@@ -106,14 +141,14 @@
       "order": 2,
       "read_data": [],
       "write_data": [],
-      "read_state": [
-        "loss"
-      ],
-      "write_state": [],
-      "parameters": {
-        "prefix": "State Output: "
-      },
-      "category": "OUTPUT"
+      "category": "OUTPUT",
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "State Output: {{ state.loss }}",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     }
   },
   "return_data": [],

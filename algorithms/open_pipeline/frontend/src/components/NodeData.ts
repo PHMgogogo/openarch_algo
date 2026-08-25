@@ -9,8 +9,7 @@ export class NodeData {
   order: number = -1
   read_data: string[] = []
   write_data: string[] = []
-  read_state: string[] = []
-  write_state: string[] = []
-  parameters: Record<string, any> = {}
+  in_parameters: Record<string, any> = {}
+  out_parameters: Record<string, any> = {}
   category: string = ""
 }

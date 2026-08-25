@@ -17,6 +17,8 @@ import json
 import jinja2
 import openai
 import os
+import inspect
+import textwrap
 from datetime import datetime
 
 dotenv.load_dotenv()
@@ -31,7 +33,6 @@ def dynamic_load_client(
         response = requests.get(url)
         response.raise_for_status()
         script_content = response.text
-
         with open(save_path, "w", encoding="utf-8") as f:
             f.write(script_content.replace("\r\n", "\n"))
     except Exception as e:
@@ -70,6 +71,42 @@ class DataView(BaseModel):
     stride: int = 0
 
 
+T = typing.TypeVar("T")
+
+
+class ValueRef(BaseModel, typing.Generic[T]):
+    constant: typing.Optional[T] = None
+    state: typing.Optional[str] = None
+    mode: Literal["constant", "state"] = "constant"
+
+    def resolve(self, context: "Context") -> typing.Any:
+        if self.mode == "state":
+            return context.state.get(self.state)
+        return self.constant
+
+
+class RuntimeParameters:
+    def __init__(self, parameters: typing.Any, context: "Context"):
+        self._parameters = parameters
+        self._context = context
+
+    def __getattr__(self, name: str) -> typing.Any:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return self._resolve(getattr(self._parameters, name))
+
+    def _resolve(self, value: typing.Any) -> typing.Any:
+        if isinstance(value, ValueRef):
+            return value.resolve(self._context)
+        if isinstance(value, list):
+            return [self._resolve(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self._resolve(item) for item in value)
+        if isinstance(value, dict):
+            return {k: self._resolve(v) for k, v in value.items()}
+        return value
+
+
 class Node(BaseModel):
     _node_registry: ClassVar[dict[str, type["Node"]]] = {}
 
@@ -92,6 +129,16 @@ class Node(BaseModel):
                 return sub_cls.model_validate(data)
         return handler(data)
 
+    @classmethod
+    def model_json_schema(cls, *args: typing.Any, **kwargs: typing.Any) -> dict:
+        schema = super().model_json_schema(*args, **kwargs)
+        for params in schema.get("$defs", {}).values():
+            for key, prop in params.get("properties", {}).items():
+                ref = prop.get("$ref", "")
+                if ref.startswith("#/$defs/ValueRef") and "title" not in prop:
+                    prop["title"] = key.replace("_", " ").title()
+        return schema
+
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()), pattern=r"^[A-Za-z0-9_-]+$"
     )
@@ -112,17 +159,15 @@ class Node(BaseModel):
     write_data: list[str] = Field(
         default_factory=list,
     )
-    read_state: list[str] = Field(
-        default_factory=list,
-    )
-    write_state: list[str] = Field(
-        default_factory=list,
-    )
 
-    class Parameters(BaseModel):
+    class InParameters(BaseModel):
         pass
 
-    parameters: Parameters = Parameters()
+    class OutParameters(BaseModel):
+        pass
+
+    in_parameters: InParameters = InParameters()
+    out_parameters: OutParameters = OutParameters()
     category: str = ""
 
     @abstractmethod
@@ -134,24 +179,28 @@ class Node(BaseModel):
 
 class TextCsvInputNode(Node):
     read_data: list[str] = Field(default_factory=list, max_length=0)
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
     category: str = "INPUT"
 
-    class Parameters(BaseModel):
-        text_csv: str = "x,y\n1,3\n2,6\n3,7\n4,9\n"
-        with_header: bool = True
-        overwrite_header: bool = False
+    class InParameters(BaseModel):
+        text_csv: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](constant="x,y\n1,3\n2,6\n3,7\n4,9\n")
+        )
+        with_header: ValueRef[bool] = Field(
+            default_factory=lambda: ValueRef[bool](constant=True)
+        )
+        overwrite_header: ValueRef[bool] = Field(
+            default_factory=lambda: ValueRef[bool](constant=False)
+        )
 
-    parameters: Parameters = Parameters()
+    in_parameters: InParameters = InParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
         write_data, column_names = text_csv_to_tensor(
-            self.parameters.text_csv, self.parameters.with_header
+            self.in_parameters.text_csv, self.in_parameters.with_header
         )
-        if self.parameters.overwrite_header:
+        if self.in_parameters.overwrite_header:
             column_names = self.write_data
             return write_data, True
         else:
@@ -159,72 +208,54 @@ class TextCsvInputNode(Node):
             return [], True
 
 
-class DataOutputNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
-    write_data: list[str] = Field(default_factory=list, max_length=0)
-    category: str = "OUTPUT"
-
-    class Parameters(BaseModel):
-        prefix: str = "Data Output: "
-
-    parameters: Parameters = Parameters()
-
-    def process(
-        self, read_data: list[Tensor_N], context: Context
-    ) -> tuple[list[Tensor_N], bool]:
-        context.output.append(
-            self.parameters.prefix + str([data.tolist() for data in read_data])
-        )
-        return [], True
-
-
-class StateOutputNode(Node):
+class OutputNode(Node):
     read_data: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
     write_data: list[str] = Field(default_factory=list, max_length=0)
     category: str = "OUTPUT"
 
-    class Parameters(BaseModel):
-        prefix: str = "State Output: "
+    class InParameters(BaseModel):
+        jinja_prompt: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](
+                constant="Output: {{ data }} {{ state }}"
+            )
+        )
 
-    parameters: Parameters = Parameters()
+    in_parameters: InParameters = InParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
-        reprs = [str(item) for item in context.state.get(self.read_state)]
-        context.output.append(self.parameters.prefix + " ".join(reprs))
+        data_ctx: dict[str, typing.Any] = {}
+        for k, v in context.data.values.items():
+            data_ctx[k] = v.tolist() if isinstance(v, torch.Tensor) else v
+        state_ctx: dict[str, typing.Any] = {}
+        for k, v in context.state.values.items():
+            state_ctx[k] = v.tolist() if isinstance(v, torch.Tensor) else v
+        message = (
+            jinja2.Environment()
+            .from_string(self.in_parameters.jinja_prompt)
+            .render(data=data_ctx, state=state_ctx)
+        )
+        context.output.append(message)
         return [], True
 
 
 class AddNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
     category: str = "BY_ROW"
+
+    class InParameters(BaseModel):
+        k: ValueRef[float] = Field(default=ValueRef[float](constant=0), title="k")
+
+    in_parameters: InParameters = InParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
-        return [sum(read_data)], True
-
-
-class AddStateKNode(Node):
-    read_state: list[str] = Field(default_factory=list, min_length=1, max_length=1)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
-    category: str = "BY_ROW"
-
-    def process(
-        self, read_data: list[Tensor_N], context: Context
-    ) -> tuple[list[Tensor_N], bool]:
-        return [
-            data + context.state.get(self.read_state[0], 0) for data in read_data
-        ], True
+        k = self.in_parameters.k
+        return [data + k for data in read_data], True
 
 
 class MeanNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
     category: str = "BY_ROW"
 
     def process(
@@ -234,21 +265,22 @@ class MeanNode(Node):
 
 
 class ColumnMeanNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
     write_data: list[str] = Field(default_factory=list, max_length=0)
     category: str = "BY_COLUMN"
+
+    class OutParameters(BaseModel):
+        mean: str = ""
+
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
-        for i, col in enumerate(read_data):
-            context.state.set(self.write_state[i], col.mean())
+        context.state.set(self.out_parameters.mean, read_data[0].mean())
         return [], True
 
 
-class MultiplyNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
+class MultiplyAllNode(Node):
     category: str = "BY_ROW"
 
     def process(
@@ -260,47 +292,35 @@ class MultiplyNode(Node):
         return [result], True
 
 
-class MultiplyKNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
+class MultiplyNode(Node):
     category: str = "BY_ROW"
 
-    class Parameters(BaseModel):
-        k: float = 1
+    class InParameters(BaseModel):
+        k: ValueRef[float] = Field(default=ValueRef[float](constant=1), title="k")
 
-    parameters: Parameters = Parameters()
+    in_parameters: InParameters = InParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
-        return [data * self.parameters.k for data in read_data], True
-
-
-class MultiplyStateKNode(Node):
-    read_state: list[str] = Field(default_factory=list, min_length=1, max_length=1)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
-    category: str = "BY_ROW"
-
-    def process(
-        self, read_data: list[Tensor_N], context: Context
-    ) -> tuple[list[Tensor_N], bool]:
-        return [
-            data * context.state.get(self.read_state[0], 1) for data in read_data
-        ], True
+        k = self.in_parameters.k
+        return [data * k for data in read_data], True
 
 
 class SendAlarmNode(Node):
     read_data: list[str] = Field(default_factory=list, max_length=0)
     write_data: list[str] = Field(default_factory=list, max_length=0)
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
     category: str = "ALARM"
 
-    class Parameters(BaseModel):
-        instance: str = ""
-        raw_data: str = "data"
+    class InParameters(BaseModel):
+        instance: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](constant="")
+        )
+        raw_data: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](constant="data")
+        )
 
-    parameters: Parameters = Parameters()
+    in_parameters: InParameters = InParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
@@ -309,12 +329,12 @@ class SendAlarmNode(Node):
         for alarm_item in context.alarm.values:
             alarms.append(
                 {
-                    "instance_id": self.parameters.instance,
+                    "instance_id": self.in_parameters.instance,
                     "range_from": alarm_item.range[0],
                     "range_to": alarm_item.range[1],
                     "cols": alarm_item.cols,
                     "message": alarm_item.message,
-                    "raw_data": self.parameters.raw_data,
+                    "raw_data": self.in_parameters.raw_data,
                     "time": str(datetime.now()),
                     "level": alarm_item.level,
                     "threshold": alarm_item.threshold,
@@ -326,23 +346,37 @@ class SendAlarmNode(Node):
 
 class AlarmIfNumberStateKNode(Node):
     read_data: list[str] = Field(default_factory=list, min_length=1)
-    read_state: list[str] = Field(default_factory=list, min_length=1)
     write_data: list[str] = Field(default_factory=list, max_length=0)
     category: str = "ALARM"
 
-    class Parameters(BaseModel):
-        threshold: float = 0
-        comparison: Literal["eq", "lt", "gt", "le", "ge"] = "eq"
-        condition: Literal["any", "all"] = "any"
-        jinja_prompt: str = "Alarm: {{ state }}"
-        level: int = 1
+    class InParameters(BaseModel):
+        values: list[ValueRef[float]] = Field(default_factory=list)
+        threshold: ValueRef[float] = Field(
+            default_factory=lambda: ValueRef[float](constant=0)
+        )
+        comparison: ValueRef[Literal["eq", "lt", "gt", "le", "ge"]] = Field(
+            default_factory=lambda: ValueRef[Literal["eq", "lt", "gt", "le", "ge"]](
+                constant="eq"
+            )
+        )
+        condition: ValueRef[Literal["any", "all"]] = Field(
+            default_factory=lambda: ValueRef[Literal["any", "all"]](constant="any")
+        )
+        jinja_prompt: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](constant="Alarm: {{ state }}")
+        )
+        level: ValueRef[int] = Field(default_factory=lambda: ValueRef[int](constant=1))
 
-    parameters: Parameters = Parameters()
+    class OutParameters(BaseModel):
+        triggered: str = ""
+
+    in_parameters: InParameters = InParameters()
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
-        threshold = self.parameters.threshold
+        threshold = self.in_parameters.threshold
         ops = {
             "eq": lambda v: v == threshold,
             "lt": lambda v: v < threshold,
@@ -350,10 +384,12 @@ class AlarmIfNumberStateKNode(Node):
             "le": lambda v: v <= threshold,
             "ge": lambda v: v >= threshold,
         }
-        values = context.state.get(self.read_state)
-        results = [bool(ops[self.parameters.comparison](v)) for v in values]
-        triggered = any(results) if self.parameters.condition == "any" else all(results)
-        context.state.set(self.write_state, triggered)
+        values = self.in_parameters.values
+        results = [bool(ops[self.in_parameters.comparison](v)) for v in values]
+        triggered = (
+            any(results) if self.in_parameters.condition == "any" else all(results)
+        )
+        context.state.set(self.out_parameters.triggered, triggered)
         if triggered:
             data_ctx: dict[str, typing.Any] = {}
             for k, v in context.data.values.items():
@@ -361,7 +397,7 @@ class AlarmIfNumberStateKNode(Node):
             state_ctx: dict[str, typing.Any] = dict(context.state.values)
             message = (
                 jinja2.Environment()
-                .from_string(self.parameters.jinja_prompt)
+                .from_string(self.in_parameters.jinja_prompt)
                 .render(data=data_ctx, state=state_ctx)
             )
             max_len = max(len(col) for col in read_data)
@@ -370,8 +406,8 @@ class AlarmIfNumberStateKNode(Node):
                     cols=self.read_data,
                     range=(0, max_len),
                     message=message,
-                    level=self.parameters.level,
-                    threshold=threshold
+                    level=self.in_parameters.level,
+                    threshold=threshold,
                 )
             )
         return [], True
@@ -379,8 +415,6 @@ class AlarmIfNumberStateKNode(Node):
 
 class SubtractNode(Node):
     read_data: list[str] = Field(default_factory=list, min_length=2, max_length=2)
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
     category: str = "BY_ROW"
 
     def process(
@@ -391,8 +425,6 @@ class SubtractNode(Node):
 
 class DivideNode(Node):
     read_data: list[str] = Field(default_factory=list, min_length=2, max_length=2)
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
     category: str = "BY_ROW"
 
     def process(
@@ -402,44 +434,53 @@ class DivideNode(Node):
 
 
 class PowerKNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
     category: str = "BY_ROW"
 
-    class Parameters(BaseModel):
-        exponent: float = 1
+    class InParameters(BaseModel):
+        exponent: ValueRef[float] = Field(
+            default_factory=lambda: ValueRef[float](constant=1)
+        )
 
-    parameters: Parameters = Parameters()
+    in_parameters: InParameters = InParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
-        return [data.pow(self.parameters.exponent) for data in read_data], True
+        return [data.pow(self.in_parameters.exponent) for data in read_data], True
 
 
 class WriteStateKNode(Node):
     read_data: list[str] = Field(default_factory=list, max_length=0)
-    read_state: list[str] = Field(default_factory=list, max_length=0)
     write_data: list[str] = Field(default_factory=list, max_length=0)
     category: str = "STATE"
 
-    class Parameters(BaseModel):
-        value: typing.Any = 0
+    class InParameters(BaseModel):
+        value: ValueRef[typing.Any] = Field(
+            default_factory=lambda: ValueRef[typing.Any](constant=0)
+        )
 
-    parameters: Parameters = Parameters()
+    class OutParameters(BaseModel):
+        target: str = ""
+
+    in_parameters: InParameters = InParameters()
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
-        context.state.set(self.write_state, self.parameters.value)
+        context.state.set(self.out_parameters.target, self.in_parameters.value)
         return [], True
 
 
 class PearsonNode(Node):
     read_data: list[str] = Field(default_factory=list, min_length=2, max_length=2)
-    read_state: list[str] = Field(default_factory=list, max_length=0)
     write_data: list[str] = Field(default_factory=list, max_length=0)
     category: str = "BY_COLUMN"
+
+    class OutParameters(BaseModel):
+        rho: str = ""
+
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
@@ -448,64 +489,74 @@ class PearsonNode(Node):
         x = x - x.mean()
         y = y - y.mean()
         r = (x * y).sum() / torch.sqrt((x * x).sum() * (y * y).sum())
-        context.state.set(self.write_state, float(r))
+        context.state.set(self.out_parameters.rho, float(r))
         return [], True
 
 
 class RoundNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
     category: str = "BY_COLUMN"
 
-    class Parameters(BaseModel):
-        decimals: int = Field(default=4, ge=0)
+    class InParameters(BaseModel):
+        decimals: ValueRef[int] = Field(
+            default_factory=lambda: ValueRef[int](constant=4)
+        )
 
-    parameters: Parameters = Parameters()
+    in_parameters: InParameters = InParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
         write_data = [
-            torch.round(tensor, decimals=self.parameters.decimals)
+            torch.round(tensor, decimals=self.in_parameters.decimals)
             for tensor in read_data
         ]
         for key in self.write_data:
-            context.data.decimals[key] = self.parameters.decimals
+            context.data.decimals[key] = self.in_parameters.decimals
         return write_data, True
 
 
 class VarNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
     write_data: list[str] = Field(default_factory=list, max_length=0)
     category: str = "BY_COLUMN"
+
+    class OutParameters(BaseModel):
+        value: str = ""
+
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
-        for i, k in enumerate(self.write_state):
-            context.state.set(k, float(read_data[i].var()))
+        context.state.set(self.out_parameters.value, float(read_data[0].var()))
         return [], True
 
 
 class StdNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
     write_data: list[str] = Field(default_factory=list, max_length=0)
     category: str = "BY_COLUMN"
+
+    class OutParameters(BaseModel):
+        value: str = ""
+
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
-        for i, k in enumerate(self.write_state):
-            context.state.set(k, float(read_data[i].std()))
+        context.state.set(self.out_parameters.value, float(read_data[0].std()))
         return [], True
 
 
 class OLSRegressionNode(Node):
     read_data: list[str] = Field(default_factory=list, min_length=2, max_length=2)
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, min_length=2, max_length=2)
     write_data: list[str] = Field(default_factory=list, max_length=0)
     category: str = "REGRESSION"
+
+    class OutParameters(BaseModel):
+        k: str = ""
+        b: str = ""
+
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
@@ -516,90 +567,96 @@ class OLSRegressionNode(Node):
         y_mean = y.mean()
         k = ((x - x_mean) * (y - y_mean)).sum() / ((x - x_mean) ** 2).sum()
         b = y_mean - k * x_mean
-        context.state.set(self.write_state[0], float(k))
-        context.state.set(self.write_state[1], float(b))
+        context.state.set(self.out_parameters.k, float(k))
+        context.state.set(self.out_parameters.b, float(b))
         return [], True
 
 
 class DemingRegressionNode(Node):
     read_data: list[str] = Field(default_factory=list, min_length=2, max_length=2)
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, min_length=2, max_length=2)
     write_data: list[str] = Field(default_factory=list, max_length=0)
     category: str = "REGRESSION"
 
-    class Parameters(BaseModel):
-        lambda_: float = Field(default=1, alias="lambda")
+    class InParameters(BaseModel):
+        lambda_: ValueRef[float] = Field(
+            default_factory=lambda: ValueRef[float](constant=1), alias="lambda"
+        )
 
-    parameters: Parameters = Parameters()
+    class OutParameters(BaseModel):
+        k: str = ""
+        b: str = ""
+
+    in_parameters: InParameters = InParameters()
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
         x = read_data[0]
         y = read_data[1]
-        lambda_ = self.parameters.lambda_
+        lambda_ = self.in_parameters.lambda_
         x_mean = x.mean()
         y_mean = y.mean()
-
         dx = x - x_mean
         dy = y - y_mean
-
         sxx = (dx * dx).mean()
         syy = (dy * dy).mean()
         sxy = (dx * dy).mean()
-
         delta = syy - lambda_ * sxx
-
         beta1 = (delta + torch.sqrt(delta**2 + 4 * lambda_ * sxy**2)) / (2 * sxy)
-
         beta0 = y_mean - beta1 * x_mean
-        context.state.set(self.write_state[0], float(beta0))
-        context.state.set(self.write_state[1], float(beta1))
+        context.state.set(self.out_parameters.k, float(beta0))
+        context.state.set(self.out_parameters.b, float(beta1))
         return [], True
 
 
 class ShewharNode(Node):
     read_data: list[str] = Field(default_factory=list, max_length=1)
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-    write_state: list[str] = Field(default_factory=list, max_length=0)
 
-    class Parameters(BaseModel):
-        mu_key: str = ""
-        sigma_key: str = ""
-        ratio: float = 3
+    class InParameters(BaseModel):
+        mu: ValueRef[float] = Field(default_factory=lambda: ValueRef[float](constant=0))
+        sigma: ValueRef[float] = Field(
+            default_factory=lambda: ValueRef[float](constant=1)
+        )
+        ratio: ValueRef[float] = Field(
+            default_factory=lambda: ValueRef[float](constant=3)
+        )
 
-    parameters: Parameters = Parameters()
+    in_parameters: InParameters = InParameters()
     category: str = "BY_ROW"
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
         data = read_data[0]
-        mu = context.state.get(self.parameters.mu_key)
-        sigma = context.state.get(self.parameters.sigma_key)
-        upper = mu + self.parameters.ratio * sigma
-        lower = mu - self.parameters.ratio * sigma
+        mu = self.in_parameters.mu
+        sigma = self.in_parameters.sigma
+        upper = mu + self.in_parameters.ratio * sigma
+        lower = mu - self.in_parameters.ratio * sigma
         out_of_control = ((data < lower) | (data > upper)).float()
         return [out_of_control], True
 
 
 class InferenceNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-
     category: str = "REMOTE"
 
-    class Parameters(BaseModel):
-        instance: str = ""
+    class InParameters(BaseModel):
+        instance: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](constant="")
+        )
 
-    parameters: Parameters = Parameters()
+    class OutParameters(BaseModel):
+        loss: str = ""
+
+    in_parameters: InParameters = InParameters()
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
         text_csv = tensor_to_text_csv(read_data, self.read_data)
         result = client.highlevel.infer_text_csv(
-            self.parameters.instance, text_csv, self.read_data
+            self.in_parameters.instance, text_csv, self.read_data
         )
         print(result)
         result = result["result"][0]
@@ -607,7 +664,7 @@ class InferenceNode(Node):
         result_loss = result["loss"]
         result_ids = result["ids"]
         write_data = []
-        context.state.set(self.write_state, result_loss)
+        context.state.set(self.out_parameters.loss, result_loss)
         for col in range(len(self.write_data)):
             write_data.append(torch.full((len(read_data[0]),), torch.nan))
         for row, row_id in enumerate(result_ids):
@@ -617,34 +674,48 @@ class InferenceNode(Node):
 
 
 class TrainNode(Node):
-    read_state: list[str] = Field(default_factory=list, max_length=0)
-
     category: str = "REMOTE"
 
-    class Parameters(BaseModel):
-        instance: str = ""
-        epoch: int = 1
-        learning_rate: float = 1e-3
-        batch_size: int = 1
-        device: str = "cpu"
-        data_cols: list[str] = Field(default_factory=list)
-        label_cols: list[str] = Field(default_factory=list)
+    class InParameters(BaseModel):
+        instance: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](constant="")
+        )
+        epoch: ValueRef[int] = Field(default_factory=lambda: ValueRef[int](constant=1))
+        learning_rate: ValueRef[float] = Field(
+            default_factory=lambda: ValueRef[float](constant=1e-3)
+        )
+        batch_size: ValueRef[int] = Field(
+            default_factory=lambda: ValueRef[int](constant=1)
+        )
+        device: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](constant="cpu")
+        )
+        data_cols: ValueRef[list[str]] = Field(
+            default_factory=lambda: ValueRef[list[str]](constant=[])
+        )
+        label_cols: ValueRef[list[str]] = Field(
+            default_factory=lambda: ValueRef[list[str]](constant=[])
+        )
 
-    parameters: Parameters = Parameters()
+    class OutParameters(BaseModel):
+        loss: str = ""
+
+    in_parameters: InParameters = InParameters()
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
     ) -> tuple[list[Tensor_N], bool]:
         text_csv = tensor_to_text_csv(read_data, self.read_data)
         result = client.highlevel.train_text_csv(
-            self.parameters.instance,
+            self.in_parameters.instance,
             text_csv,
-            self.parameters.data_cols,
-            self.parameters.label_cols,
-            self.parameters.epoch,
-            self.parameters.learning_rate,
-            self.parameters.device,
-            self.parameters.batch_size,
+            self.in_parameters.data_cols,
+            self.in_parameters.label_cols,
+            self.in_parameters.epoch,
+            self.in_parameters.learning_rate,
+            self.in_parameters.device,
+            self.in_parameters.batch_size,
         )
         print(result)
         result = result["result"][0]
@@ -652,7 +723,7 @@ class TrainNode(Node):
         result_loss = result["loss"]
         result_ids = result["ids"]
         write_data = []
-        context.state.set(self.write_state, result_loss)
+        context.state.set(self.out_parameters.loss, result_loss)
         for col in range(len(self.write_data)):
             write_data.append(torch.full((len(read_data[0]),), torch.nan))
         for row, row_id in enumerate(result_ids):
@@ -665,19 +736,40 @@ class LLMNode(Node):
     category: str = "REMOTE"
     write_data: list[str] = Field(default_factory=list, max_length=0)
     read_data: list[str] = Field(default_factory=list, max_length=0)
-    read_state: list[str] = Field(default_factory=list, max_length=0)
 
-    class Parameters(BaseModel):
-        response_api: bool = True
-        openai_api_key: str = os.environ["OPENAI_API_KEY"]
-        openai_base_url: str = os.environ["OPENAI_BASE_URL"]
-        openai_model_name: str = os.environ["OPENAI_MODEL_NAME"]
-        return_json: bool = True
-        jinja_prompt: str = "Hello"
-        reasoning: bool = False
+    class InParameters(BaseModel):
+        response_api: ValueRef[bool] = Field(
+            default_factory=lambda: ValueRef[bool](constant=True)
+        )
+        openai_api_key: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](constant=os.environ["OPENAI_API_KEY"])
+        )
+        openai_base_url: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](
+                constant=os.environ["OPENAI_BASE_URL"]
+            )
+        )
+        openai_model_name: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](
+                constant=os.environ["OPENAI_MODEL_NAME"]
+            )
+        )
+        return_json: ValueRef[bool] = Field(
+            default_factory=lambda: ValueRef[bool](constant=True)
+        )
+        jinja_prompt: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](constant="Hello")
+        )
+        reasoning: ValueRef[bool] = Field(
+            default_factory=lambda: ValueRef[bool](constant=False)
+        )
+
+    class OutParameters(BaseModel):
+        output: str = ""
         reasoning_state: str = ""
 
-    parameters: Parameters = Field(default_factory=Parameters)
+    in_parameters: InParameters = Field(default_factory=InParameters)
+    out_parameters: OutParameters = OutParameters()
 
     def process(
         self, read_data: list[Tensor_N], context: Context
@@ -685,31 +777,28 @@ class LLMNode(Node):
         data_ctx: dict[str, typing.Any] = {}
         for k, v in context.data.values.items():
             data_ctx[k] = v.tolist() if isinstance(v, torch.Tensor) else v
-
         state_ctx: dict[str, typing.Any] = dict(context.state.values)
-        template = jinja2.Environment().from_string(self.parameters.jinja_prompt)
+        template = jinja2.Environment().from_string(self.in_parameters.jinja_prompt)
         prompt = template.render(data=data_ctx, state=state_ctx)
         client = openai.OpenAI(
-            api_key=self.parameters.openai_api_key,
-            base_url=self.parameters.openai_base_url,
+            api_key=self.in_parameters.openai_api_key,
+            base_url=self.in_parameters.openai_base_url,
         )
-
         content = ""
         reasoning_text = ""
-
-        if self.parameters.response_api:
+        if self.in_parameters.response_api:
             create_kwargs: dict[str, typing.Any] = {
-                "model": self.parameters.openai_model_name,
+                "model": self.in_parameters.openai_model_name,
                 "input": prompt,
             }
-            if self.parameters.reasoning:
+            if self.in_parameters.reasoning:
                 create_kwargs["reasoning"] = {"effort": "max"}
                 create_kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
-            if self.parameters.return_json:
+            if self.in_parameters.return_json:
                 create_kwargs["text"] = {"format": {"type": "json_object"}}
             response = client.responses.create(**create_kwargs)
             content = response.output_text
-            if self.parameters.reasoning:
+            if self.in_parameters.reasoning:
                 try:
                     for item in response.output:
                         if getattr(item, "type", None) == "reasoning":
@@ -723,40 +812,57 @@ class LLMNode(Node):
                     pass
         else:
             create_kwargs: dict[str, typing.Any] = {
-                "model": self.parameters.openai_model_name,
+                "model": self.in_parameters.openai_model_name,
                 "messages": [{"role": "user", "content": prompt}],
             }
-            if self.parameters.reasoning:
+            if self.in_parameters.reasoning:
                 create_kwargs["reasoning_effort"] = "medium"
                 create_kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
-            if self.parameters.return_json:
+            if self.in_parameters.return_json:
                 create_kwargs["response_format"] = {"type": "json_object"}
             response = client.chat.completions.create(**create_kwargs)
             content = response.choices[0].message.content or ""
-            if self.parameters.reasoning:
+            if self.in_parameters.reasoning:
                 try:
                     reasoning_text = getattr(
                         response.choices[0].message, "reasoning_content", ""
                     )
                 except Exception:
                     pass
-        if self.parameters.reasoning and self.parameters.reasoning_state:
-            context.state.set(self.parameters.reasoning_state, reasoning_text)
-        if self.parameters.return_json:
+        if self.in_parameters.reasoning and self.out_parameters.reasoning_state:
+            context.state.set(self.out_parameters.reasoning_state, reasoning_text)
+        if self.in_parameters.return_json:
             try:
                 parsed = json.loads(content)
-                if isinstance(parsed, dict):
-                    for k in self.write_state:
-                        if k in parsed:
-                            context.state.set(k, parsed[k])
-                else:
-                    context.state.set(self.write_state, content)
+                context.state.set(self.out_parameters.output, parsed)
             except (json.JSONDecodeError, ValueError):
-                context.state.set(self.write_state, content)
+                context.state.set(self.out_parameters.output, content)
         else:
-            context.state.set(self.write_state, content)
-
+            context.state.set(self.out_parameters.output, content)
         return [], True
+
+
+class CodeNode(Node):
+    category: str = "REMOTE"
+
+    class InParameters(BaseModel):
+        code: ValueRef[str] = Field(
+            default_factory=lambda: ValueRef[str](
+                constant=textwrap.dedent(inspect.getsource(AddNode.process))
+            )
+        )
+
+    in_parameters: InParameters = InParameters()
+
+    def process(
+        self, read_data: list[Tensor_N], context: Context
+    ) -> tuple[list[Tensor_N], bool]:
+        ns: dict[str, typing.Any] = {}
+        exec(self.in_parameters.code, ns)
+        fn = ns.get("process")
+        if not callable(fn):
+            raise ValueError("CodeNode: process function is not defined in code")
+        return fn(self, read_data, context)
 
 
 def get_all_node_cls() -> list[type[Node]]:
@@ -824,7 +930,6 @@ class Pipeline(BaseModel):
         order_groups: dict[int, list[Node]] = {}
         for node in self.nodes.values():
             order_groups.setdefault(node.order, []).append(node)
-
         for order in sorted(order_groups.keys()):
             for i, node in enumerate(order_groups[order]):
                 node.x = order * width
@@ -841,10 +946,8 @@ class Pipeline(BaseModel):
         in_degree: dict[str, int] = {}
         for nid, node in self.nodes.items():
             in_degree[nid] = len([p for p in node.prev if p in self.nodes])
-
         queue = deque([nid for nid, deg in in_degree.items() if deg == 0])
         visited_count = 0
-
         while queue:
             nid = queue.popleft()
             visited_count += 1
@@ -853,7 +956,6 @@ class Pipeline(BaseModel):
                     in_degree[next_id] -= 1
                     if in_degree[next_id] == 0:
                         queue.append(next_id)
-
         return visited_count == len(self.nodes)
 
     def load_init(
@@ -884,10 +986,8 @@ class Pipeline(BaseModel):
             self.update_prev_next()
         if update_order:
             self.update_order()
-
         if not self.is_dag():
             raise ValueError("Pipeline is not a DAG")
-
         context = self.load_init(init_data, init_state)
         if pipeline_id is not None:
             context.pipeline_id = pipeline_id
@@ -908,7 +1008,12 @@ class Pipeline(BaseModel):
                     node.id, node.title or "", (time.perf_counter() - t0) * 1000
                 )
                 read_data = context.data.get(node.read_data) if node.read_data else []
-                result, should_continue = node.process(read_data, context)
+                runtime_node = node.model_copy(
+                    update={
+                        "in_parameters": RuntimeParameters(node.in_parameters, context)
+                    }
+                )
+                result, should_continue = runtime_node.process(read_data, context)
                 if not should_continue:
                     queue = deque(node.next)
                     while queue:
@@ -1115,7 +1220,6 @@ class Context:
         state_keys = (
             return_state if return_state is not None else list(self.state.values.keys())
         )
-
         return {
             "data": {
                 k: _convert_tensor(
@@ -1138,46 +1242,3 @@ class Context:
 
 def source() -> str:
     return open(__file__, "r", encoding="utf-8").read()
-
-
-if __name__ == "__main__":
-    p = Pipeline(id="example")
-    p.add_nodes(
-        [
-            TextCsvInputNode(
-                id="raw", parameters=TextCsvInputNode.Parameters(with_header=True)
-            ),
-            TextCsvInputNode(
-                id="pred",
-                parameters=TextCsvInputNode.Parameters(text_csv="pred_x\n5\n6\n7\n8\n"),
-            ),
-            OLSRegressionNode(
-                id="ols", prev=["raw"], read_data=["x", "y"], write_state=["k", "b"]
-            ),
-            StateOutputNode(id="k_b", prev=["ols"], read_state=["k", "b"]),
-            MultiplyStateKNode(
-                id="kx",
-                prev=["pred", "ols"],
-                read_data=["pred_x"],
-                write_data=["pred_y"],
-                read_state=["k"],
-            ),
-            DataOutputNode(id="kx_out", prev=["kx"], read_data=["pred_y"]),
-            AddStateKNode(
-                id="kx_b",
-                prev=["kx"],
-                read_data=["pred_y"],
-                write_data=["pred_y"],
-                read_state=["b"],
-            ),
-            DataOutputNode(id="kx_b_out", read_data=["pred_y"], prev=["kx_b"]),
-            PearsonNode(
-                id="pearson", prev=["raw"], read_data=["x", "y"], write_state=["rho"]
-            ),
-            StateOutputNode(id="rho", prev=["pearson"], read_state=["rho"]),
-        ]
-    )
-    print(p.model_dump_json(indent=4))
-    ctx = p.run()
-    print("\n".join(ctx.output))
-    ctx.performance.dump_pretty()

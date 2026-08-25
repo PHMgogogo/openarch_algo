@@ -65,15 +65,12 @@ export const zhCN: Record<string, string> = {
 
   // NodeType
   'TextCsvInputNode': '表格输入',
-  'DataOutputNode': '输出数据',
-  'StateOutputNode': '输出状态值',
+  'OutputNode': '输出',
   'AddNode': '相加',
-  'AddStateKNode': '与状态值相加',
   'MeanNode': '行均值',
   'ColumnMeanNode': '列均值',
   'MultiplyNode': '相乘',
-  'MultiplyKNode': '与常数相乘',
-  'MultiplyStateKNode': '与状态值相乘',
+  'MultiplyAllNode': '相乘（全部输入）',
   'SubtractNode': '相减',
   'DivideNode': '相除',
   'PowerKNode': '幂运算',
@@ -91,6 +88,12 @@ export const zhCN: Record<string, string> = {
   'AlarmIfNumberStateKNode': '数值状态告警',
   'SendAlarmNode': '发送告警',
 
+  // ValueRef
+  'Constant': '常数',
+  'State Ref': '状态',
+  'Select state key': '选择状态键',
+  'Outputs (written to state)': '输出状态',
+
   // Category
   'INPUT': '输入',
   'OUTPUT': '输出',
@@ -102,6 +105,7 @@ export const zhCN: Record<string, string> = {
   'ALARM': '告警',
 
   // Parameter
+  'Rho': '相关性',
   'Title': '标题',
   'Id': 'ID',
   'Node Type': '节点类型',
@@ -115,12 +119,18 @@ export const zhCN: Record<string, string> = {
   'Text Csv': 'CSV文本',
   'With Header': '包含表头',
   'Overwrite Header': '覆盖表头',
-  'K': '乘数K',
+  'k': '系数',
+  'K': '斜率',
+  'B': '截距',
   'Exponent': '指数',
   'Lambda': 'λ系数',
   'Mu Key': '均值的状态值名称',
   'Sigma Key': '标准差的状态值名称',
   'Ratio': '比例',
+  'Mu': '均值',
+  'Sigma': '标准差',
+  'Values': '状态值列表',
+  'Code': '代码',
   'Instance': '实例',
   'Raw Data': '原始数据',
   'Epoch': '训练轮数',
@@ -150,7 +160,7 @@ export const zhCN: Record<string, string> = {
   'ge': '大于等于',
   'any': '任一满足',
   'all': '全部满足',
-
+  'Triggered': '触发状态记录',
   // Cron
   'Cron': '定时任务',
   'Enable Cron': '启用定时任务',

@@ -117,17 +117,17 @@ Pipeline 是一张有向无环图（DAG），由若干节点（Node）构成。�
 1. **连接关系**：`prev`（前驱节点 id 列表）与 `next`（后继节点 id 列表）。二者互为镜像，构成 DAG 的边。
 2. **数据与状态**：
    - 数据流：上游节点把结果写入 `write_data` 命名的数据列，下游节点通过 `read_data` 读取这些列。
-   - 状态：节点通过 `write_state` 写入键值，通过 `read_state` 读取键值（如回归系数 k、b，相关系数 rho 等标量）。
+   - 状态：节点通过 `out_parameters` 声明输出写入的 state 键，通过 `in_parameters` 里的 ValueRef 读取 state 值（如回归系数 k、b，相关系数 rho 等标量）。
 
 # 二、节点字段约定
 
 - `id`：节点唯一标识，必须满足 `^[A-Za-z0-9_-]+$`，且全图唯一。
 - `node_type`：必须是下方已注册的节点类型之一，不可自创。
 - `title`：可选，节点的显示名称。
-- `parameters`：节点参数对象，字段必须符合该节点类型的 Parameters 定义（见下方源码）。
+- `in_parameters`：节点输入参数对象，字段必须符合该节点类型的 InParameters 定义（见下方源码）。
 - `category`：节点分类（INPUT / OUTPUT / BY_ROW / BY_COLUMN / ALARM / STATE / REGRESSION / REMOTE），由系统自动确定，不要手动修改。
 - `x` / `y` / `order`：布局与执行顺序，由 `format` 工具自动计算，不要手动设置。
-- `read_data` / `write_data`：数据列名；`read_state` / `write_state`：状态键名。
+- `read_data` / `write_data`：数据列名；`out_parameters`：本节点输出写入的 state 键名。
 
 # 三、工具使用方式
 
@@ -153,7 +153,7 @@ Pipeline 是一张有向无环图（DAG），由若干节点（Node）构成。�
 - **保持 DAG**：禁止出现环（例如 A.next 包含 B，同时 B.next 又包含 A），否则流水线无法运行。
 - `prev` / `next` 中引用的节点 id 必须真实存在于 `nodes` 中；连接必须双向一致（A 的 next 有 B，则 B 的 prev 必须有 A）。
 - 新增节点时 `next`、`prev`、`order`、`x`、`y` 可以先为空或默认值，调用 `format` 后自动补齐；但 `prev`/`next` 是逻辑连接，必须由你正确填写。
-- 数据列名必须匹配：消费方 `read_data` 的列名必须是某个上游节点 `write_data` 或输入节点写入的列名；`read_state` 同理。
+- 数据列名必须匹配：消费方 `read_data` 的列名必须是某个上游节点 `write_data` 或输入节点写入的列名；`out_parameters` 引用的 state 键同理。
 - 参数必须符合节点类型定义（数值、布尔、字符串、列表都要用正确的 JSON 类型）。
 - 不要修改 `category`、`order`、`x`、`y` 等由系统管理的字段。
 - 每完成一个明确的编辑目标后，用 `view` 做一次自检，确认无误后再继续，避免一次 patch 改动过大导致错误。

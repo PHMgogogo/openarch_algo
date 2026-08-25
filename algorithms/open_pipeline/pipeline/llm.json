@@ -17,14 +17,20 @@
       "order": 0,
       "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [
-        "who"
-      ],
-      "parameters": {
-        "value": "孙中杰"
+      "category": "STATE",
+      "in_parameters": {
+        "value": {
+          "constant": {
+            "constant": "孙中杰",
+            "state": null
+          },
+          "state": null,
+          "mode": "constant"
+        }
       },
-      "category": "STATE"
+      "out_parameters": {
+        "target": "who"
+      }
     },
     "b4f7b8a2-f767-4080-9d52-b21ec2caf8db": {
       "id": "b4f7b8a2-f767-4080-9d52-b21ec2caf8db",
@@ -42,14 +48,24 @@
         "x",
         "y"
       ],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "text_csv": "x,y\n1,3\n2,6\n3,7\n4,9\n",
-        "with_header": true,
-        "overwrite_header": false
-      },
-      "category": "INPUT"
+      "category": "INPUT",
+      "in_parameters": {
+        "text_csv": {
+          "constant": "x,y\n1,3\n2,6\n3,7\n4,9\n",
+          "state": null,
+          "mode": "constant"
+        },
+        "with_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "overwrite_header": {
+          "constant": false,
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "b463d2ee-8b97-4aca-afef-82542d0b08f7": {
       "id": "b463d2ee-8b97-4aca-afef-82542d0b08f7",
@@ -67,25 +83,56 @@
       "order": 1,
       "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [
-        "output"
-      ],
-      "parameters": {
-        "response_api": true,
-        "openai_api_key": "sk-43bfffbda4a047efa6c7b8f72aacbd29",
-        "openai_base_url": "https://api.deepseek.com/v1",
-        "openai_model_name": "deepseek-v4-flash",
-        "return_json": false,
-        "jinja_prompt": "我是{{state.who}}，跟我打招呼，然后告诉我，你如何看待以下两列数据的关系？\n{{data.x}}\n{{data.y}}",
-        "reasoning": true,
-        "reasoning_state": "thinking"
+      "category": "REMOTE",
+      "in_parameters": {
+        "response_api": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "openai_api_key": {
+          "constant": "sk-43bfffbda4a047efa6c7b8f72aacbd29",
+          "state": null,
+          "mode": "constant"
+        },
+        "openai_base_url": {
+          "constant": "https://api.deepseek.com/v1",
+          "state": null,
+          "mode": "constant"
+        },
+        "openai_model_name": {
+          "constant": "deepseek-v4-flash",
+          "state": null,
+          "mode": "constant"
+        },
+        "return_json": {
+          "constant": false,
+          "state": null,
+          "mode": "constant"
+        },
+        "jinja_prompt": {
+          "constant": "我是{{state.who}}，跟我打招呼，然后告诉我，你如何看待以下两列数据的关系？\n{{data.x}}\n{{data.y}}",
+          "state": null,
+          "mode": "constant"
+        },
+        "reasoning": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "reasoning_state": {
+          "constant": "thinking",
+          "state": null,
+          "mode": "constant"
+        }
       },
-      "category": "REMOTE"
+      "out_parameters": {
+        "output": "output"
+      }
     },
     "bb53a388-e68d-40d1-884f-cc5c34444e35": {
       "id": "bb53a388-e68d-40d1-884f-cc5c34444e35",
-      "node_type": "StateOutputNode",
+      "node_type": "OutputNode",
       "title": "output",
       "next": [],
       "prev": [
@@ -96,15 +143,14 @@
       "order": 2,
       "read_data": [],
       "write_data": [],
-      "read_state": [
-        "thinking",
-        "output"
-      ],
-      "write_state": [],
-      "parameters": {
-        "prefix": ""
-      },
-      "category": "OUTPUT"
+      "category": "OUTPUT",
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "{{ state.thinking }} {{ state.output }}",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     }
   },
   "return_data": [],

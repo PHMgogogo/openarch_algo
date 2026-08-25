@@ -14,7 +14,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from agents import TResponseInputItem
 
 dotenv.load_dotenv()
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -236,15 +235,14 @@ async def node_help(type: str):
     source_code = inspect.getsource(node_cls)
     base_source = inspect.getsource(Node)
 
-    params_cls = getattr(node_cls, "Parameters", None)
     try:
-        params_schema = json.dumps(
-            params_cls.model_json_schema(), ensure_ascii=False, indent=2
+        node_schema = json.dumps(
+            node_cls.model_json_schema(), ensure_ascii=False, indent=2
         )
     except Exception:
-        params_schema = "{}"
+        node_schema = "{}"
 
-    prompt = f"""你是一个节点使用文档生成助手。请根据以下节点的源代码和参数 Schema，生成Help文档：
+    prompt = f"""你是一个节点使用文档生成助手。请根据以下节点的源代码和待填写的 JSON Schema，生成 Help 文档。
 
 1. **节点功能**：这个节点是做什么的，在什么场景下使用
 2. **使用方法**：如何在流水线中使用这个节点
@@ -263,9 +261,9 @@ async def node_help(type: str):
 {source_code}
 ```
 
-参数 Schema：
+待填写的节点 JSON Schema：
 ```json
-{params_schema}
+{node_schema}
 ```
 
 请用中文回答，条理清晰，简洁明了。"""

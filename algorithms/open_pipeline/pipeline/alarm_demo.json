@@ -19,14 +19,24 @@
       "order": 0,
       "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "text_csv": "x,y\n1,3\n2,5\n3,7\n4,9\n",
-        "with_header": true,
-        "overwrite_header": false
-      },
-      "category": "INPUT"
+      "category": "INPUT",
+      "in_parameters": {
+        "text_csv": {
+          "constant": "x,y\n1,3\n2,5\n3,7\n4,9\n",
+          "state": null,
+          "mode": "constant"
+        },
+        "with_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "overwrite_header": {
+          "constant": false,
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "pred": {
       "id": "pred",
@@ -41,14 +51,24 @@
       "order": 0,
       "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "text_csv": "pred_x\n5\n6\n7\n8\n",
-        "with_header": true,
-        "overwrite_header": false
-      },
-      "category": "INPUT"
+      "category": "INPUT",
+      "in_parameters": {
+        "text_csv": {
+          "constant": "pred_x\n5\n6\n7\n8\n",
+          "state": null,
+          "mode": "constant"
+        },
+        "with_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "overwrite_header": {
+          "constant": false,
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "ols": {
       "id": "ols",
@@ -69,13 +89,12 @@
         "y"
       ],
       "write_data": [],
-      "read_state": [],
-      "write_state": [
-        "k",
-        "b"
-      ],
-      "parameters": {},
-      "category": "REGRESSION"
+      "category": "REGRESSION",
+      "in_parameters": {},
+      "out_parameters": {
+        "k": "k",
+        "b": "b"
+      }
     },
     "deming": {
       "id": "deming",
@@ -95,15 +114,18 @@
         "y"
       ],
       "write_data": [],
-      "read_state": [],
-      "write_state": [
-        "dk",
-        "db"
-      ],
-      "parameters": {
-        "lambda": 2.0
+      "category": "REGRESSION",
+      "in_parameters": {
+        "lambda": {
+          "constant": 2.0,
+          "state": null,
+          "mode": "constant"
+        }
       },
-      "category": "REGRESSION"
+      "out_parameters": {
+        "k": "dk",
+        "b": "db"
+      }
     },
     "pearson": {
       "id": "pearson",
@@ -124,16 +146,15 @@
         "y"
       ],
       "write_data": [],
-      "read_state": [],
-      "write_state": [
-        "rho"
-      ],
-      "parameters": {},
-      "category": "BY_COLUMN"
+      "category": "BY_COLUMN",
+      "in_parameters": {},
+      "out_parameters": {
+        "rho": "rho"
+      }
     },
     "kx": {
       "id": "kx",
-      "node_type": "MultiplyStateKNode",
+      "node_type": "MultiplyNode",
       "title": null,
       "next": [
         "kx_b"
@@ -151,16 +172,18 @@
       "write_data": [
         "pred_y"
       ],
-      "read_state": [
-        "k"
-      ],
-      "write_state": [],
-      "parameters": {},
-      "category": "BY_ROW"
+      "category": "BY_ROW",
+      "in_parameters": {
+        "k": {
+          "constant": null,
+          "state": "k",
+          "mode": "state"
+        }
+      }
     },
     "k_b": {
       "id": "k_b",
-      "node_type": "StateOutputNode",
+      "node_type": "OutputNode",
       "title": null,
       "next": [],
       "prev": [
@@ -171,19 +194,18 @@
       "order": 2,
       "read_data": [],
       "write_data": [],
-      "read_state": [
-        "k",
-        "b"
-      ],
-      "write_state": [],
-      "parameters": {
-        "prefix": "State Output: "
-      },
-      "category": "OUTPUT"
+      "category": "OUTPUT",
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "State Output: {{ state.k }} {{ state.b }}",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "rho_out": {
       "id": "rho_out",
-      "node_type": "StateOutputNode",
+      "node_type": "OutputNode",
       "title": null,
       "next": [],
       "prev": [
@@ -194,18 +216,18 @@
       "order": 2,
       "read_data": [],
       "write_data": [],
-      "read_state": [
-        "rho"
-      ],
-      "write_state": [],
-      "parameters": {
-        "prefix": "State Output: "
-      },
-      "category": "OUTPUT"
+      "category": "OUTPUT",
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "State Output: {{ state.rho }}",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "dk_b": {
       "id": "dk_b",
-      "node_type": "StateOutputNode",
+      "node_type": "OutputNode",
       "title": null,
       "next": [],
       "prev": [
@@ -216,15 +238,14 @@
       "order": 2,
       "read_data": [],
       "write_data": [],
-      "read_state": [
-        "dk",
-        "db"
-      ],
-      "write_state": [],
-      "parameters": {
-        "prefix": "State Output: "
-      },
-      "category": "OUTPUT"
+      "category": "OUTPUT",
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "State Output: {{ state.dk }} {{ state.db }}",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "alarm": {
       "id": "alarm",
@@ -243,20 +264,44 @@
         "x"
       ],
       "write_data": [],
-      "read_state": [
-        "rho"
-      ],
-      "write_state": [
-        "alarm_flag"
-      ],
-      "parameters": {
-        "threshold": 0.95,
-        "comparison": "gt",
-        "condition": "any",
-        "jinja_prompt": "Rho {{ state.rho }} exceeds threshold 0.95",
-        "level": 1
+      "category": "ALARM",
+      "in_parameters": {
+        "threshold": {
+          "constant": 0.95,
+          "state": null,
+          "mode": "constant"
+        },
+        "comparison": {
+          "constant": "gt",
+          "state": null,
+          "mode": "constant"
+        },
+        "condition": {
+          "constant": "any",
+          "state": null,
+          "mode": "constant"
+        },
+        "jinja_prompt": {
+          "constant": "Rho {{ state.rho }} exceeds threshold 0.95",
+          "state": null,
+          "mode": "constant"
+        },
+        "level": {
+          "constant": 1,
+          "state": null,
+          "mode": "constant"
+        },
+        "values": [
+          {
+            "constant": null,
+            "state": "rho",
+            "mode": "state"
+          }
+        ]
       },
-      "category": "ALARM"
+      "out_parameters": {
+        "triggered": "alarm_flag"
+      }
     },
     "2757f000-2e1a-4776-a32f-dd4a188d1f1c": {
       "id": "2757f000-2e1a-4776-a32f-dd4a188d1f1c",
@@ -271,17 +316,23 @@
       "order": 3,
       "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "instance": "1ac4d2ea-558a-43de-b8cc-dd6d46037b80",
-        "raw_data": "data"
-      },
-      "category": "ALARM"
+      "category": "ALARM",
+      "in_parameters": {
+        "instance": {
+          "constant": "1ac4d2ea-558a-43de-b8cc-dd6d46037b80",
+          "state": null,
+          "mode": "constant"
+        },
+        "raw_data": {
+          "constant": "data",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "kx_b": {
       "id": "kx_b",
-      "node_type": "AddStateKNode",
+      "node_type": "AddNode",
       "title": null,
       "next": [
         "kx_b_out"
@@ -298,16 +349,18 @@
       "write_data": [
         "pred_y"
       ],
-      "read_state": [
-        "b"
-      ],
-      "write_state": [],
-      "parameters": {},
-      "category": "BY_ROW"
+      "category": "BY_ROW",
+      "in_parameters": {
+        "k": {
+          "constant": null,
+          "state": "b",
+          "mode": "state"
+        }
+      }
     },
     "kx_b_out": {
       "id": "kx_b_out",
-      "node_type": "DataOutputNode",
+      "node_type": "OutputNode",
       "title": null,
       "next": [],
       "prev": [
@@ -316,16 +369,16 @@
       "x": 1200.0,
       "y": 0.0,
       "order": 4,
-      "read_data": [
-        "pred_y"
-      ],
+      "read_data": [],
       "write_data": [],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "prefix": "Data Output: "
-      },
-      "category": "OUTPUT"
+      "category": "OUTPUT",
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "Data Output: {{ data }}",
+          "state": null,
+          "mode": "constant"
+        }
+      }
     }
   },
   "return_data": [],

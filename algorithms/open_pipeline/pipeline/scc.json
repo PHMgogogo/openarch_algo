@@ -19,14 +19,24 @@
       "write_data": [
         "data"
       ],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "text_csv": "x\n2\n1\n2\n1\n2\n1\n2\n2\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n10\n10000",
-        "with_header": true,
-        "overwrite_header": true
-      },
-      "category": "INPUT"
+      "category": "INPUT",
+      "in_parameters": {
+        "text_csv": {
+          "constant": "x\n2\n1\n2\n1\n2\n1\n2\n2\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n10\n10000",
+          "state": null,
+          "mode": "constant"
+        },
+        "with_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "overwrite_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        }
+      }
     },
     "4455fbb1-3b7f-4288-9eba-f460c6d0abc8": {
       "id": "4455fbb1-3b7f-4288-9eba-f460c6d0abc8",
@@ -45,12 +55,11 @@
         "data"
       ],
       "write_data": [],
-      "read_state": [],
-      "write_state": [
-        "sigma"
-      ],
-      "parameters": {},
-      "category": "BY_COLUMN"
+      "category": "BY_COLUMN",
+      "in_parameters": {},
+      "out_parameters": {
+        "value": "sigma"
+      }
     },
     "d6cbe17c-2ee4-419a-8c19-6eaf41ae6141": {
       "id": "d6cbe17c-2ee4-419a-8c19-6eaf41ae6141",
@@ -69,12 +78,11 @@
         "data"
       ],
       "write_data": [],
-      "read_state": [],
-      "write_state": [
-        "mu"
-      ],
-      "parameters": {},
-      "category": "BY_COLUMN"
+      "category": "BY_COLUMN",
+      "in_parameters": {},
+      "out_parameters": {
+        "mean": "mu"
+      }
     },
     "bdaa13dd-694a-4acb-ac8b-0c863fd7cbba": {
       "id": "bdaa13dd-694a-4acb-ac8b-0c863fd7cbba",
@@ -95,14 +103,24 @@
       "write_data": [
         "scc"
       ],
-      "read_state": [],
-      "write_state": [],
-      "parameters": {
-        "mu_key": "mu",
-        "sigma_key": "sigma",
-        "ratio": 3.0
-      },
-      "category": "BY_ROW"
+      "category": "BY_ROW",
+      "in_parameters": {
+        "mu": {
+          "constant": null,
+          "state": "mu",
+          "mode": "state"
+        },
+        "sigma": {
+          "constant": null,
+          "state": "sigma",
+          "mode": "state"
+        },
+        "ratio": {
+          "constant": 3.0,
+          "state": null,
+          "mode": "constant"
+        }
+      }
     }
   },
   "return_data": [],

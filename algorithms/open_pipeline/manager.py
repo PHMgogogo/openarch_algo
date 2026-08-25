@@ -264,36 +264,77 @@ if __name__ == "__main__":
     p.add_nodes(
         [
             TextCsvInputNode(
-                id="raw", parameters=TextCsvInputNode.Parameters(with_header=True)
+                id="raw",
+                in_parameters=TextCsvInputNode.InParameters(
+                    with_header=ValueRef[bool](constant=True)
+                ),
             ),
             TextCsvInputNode(
                 id="pred",
-                parameters=TextCsvInputNode.Parameters(text_csv="pred_x\n5\n6\n7\n8\n"),
+                in_parameters=TextCsvInputNode.InParameters(
+                    text_csv=ValueRef[str](constant="pred_x\n5\n6\n7\n8\n")
+                ),
             ),
             DemingRegressionNode(
-                id="deming", prev=["raw"], read_data=["x", "y"], write_state=["k", "b"]
+                id="deming",
+                prev=["raw"],
+                read_data=["x", "y"],
+                out_parameters=DemingRegressionNode.OutParameters(k="k", b="b"),
             ),
-            StateOutputNode(id="k_b", prev=["deming"], read_state=["k", "b"]),
-            MultiplyStateKNode(
+            OutputNode(
+                id="k_b",
+                prev=["deming"],
+                in_parameters=OutputNode.InParameters(
+                    jinja_prompt=ValueRef[str](
+                        constant="State Output: {{ state.k }} {{ state.b }}"
+                    )
+                ),
+            ),
+            MultiplyNode(
                 id="kx",
                 prev=["pred", "deming"],
                 read_data=["pred_x"],
                 write_data=["pred_y"],
-                read_state=["k"],
+                in_parameters=MultiplyNode.InParameters(
+                    k=ValueRef[float](state="k", mode="state")
+                ),
             ),
-            DataOutputNode(id="kx_out", prev=["kx"], read_data=["pred_y"]),
-            AddStateKNode(
+            OutputNode(
+                id="kx_out",
+                prev=["kx"],
+                in_parameters=OutputNode.InParameters(
+                    jinja_prompt=ValueRef[str](constant="Data Output: {{ data }}")
+                ),
+            ),
+            AddNode(
                 id="kx_b",
                 prev=["kx"],
                 read_data=["pred_y"],
                 write_data=["pred_y"],
-                read_state=["b"],
+                in_parameters=AddNode.InParameters(
+                    k=ValueRef[float](state="b", mode="state")
+                ),
             ),
-            DataOutputNode(id="kx_b_out", read_data=["pred_y"], prev=["kx_b"]),
+            OutputNode(
+                id="kx_b_out",
+                prev=["kx_b"],
+                in_parameters=OutputNode.InParameters(
+                    jinja_prompt=ValueRef[str](constant="Data Output: {{ data }}")
+                ),
+            ),
             PearsonNode(
-                id="pearson", prev=["raw"], read_data=["x", "y"], write_state=["rho"]
+                id="pearson",
+                prev=["raw"],
+                read_data=["x", "y"],
+                out_parameters=PearsonNode.OutParameters(rho="rho"),
             ),
-            StateOutputNode(id="rho", prev=["pearson"], read_state=["rho"]),
+            OutputNode(
+                id="rho",
+                prev=["pearson"],
+                in_parameters=OutputNode.InParameters(
+                    jinja_prompt=ValueRef[str](constant="State Output: {{ state.rho }}")
+                ),
+            ),
         ]
     )
     p.update_prev_next()

@@ -29,5 +29,6 @@
             "default_entrance": "/yolo/docs",
             "cors": false
         }
-    ]
+    ],
+    "tags": []
 }
