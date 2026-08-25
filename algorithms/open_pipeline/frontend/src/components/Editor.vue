@@ -143,7 +143,8 @@
             </el-form-item>
             <el-form-item v-else-if="isValueRef(nodeSchema.$defs.InParameters.properties[key])"
                 :label="paramLabel(key)">
-                <div class="value-ref-editor" v-if="formData.in_parameters[key]">
+                <div class="value-ref-editor" :class="{ 'value-ref-editor-textarea': valueRefValueType(key) === 'string' }"
+                    v-if="formData.in_parameters[key]">
                     <el-radio-group :model-value="valueRefMode(key)" size="small"
                         @change="(mode: string) => onValueRefModeChange(key, mode)">
                         <el-radio-button value="constant">{{ _('Constant') }}</el-radio-button>
@@ -173,12 +174,33 @@
                     <el-input-number v-else-if="valueRefValueType(key) === 'number'"
                         v-model="formData.in_parameters[key].constant"
                         :placeholder="String(nodeSchema.$defs.InParameters.properties[key].default?.constant ?? '')" />
+                    <div v-else-if="formData.node_type === 'CodeNode' && key === 'code'" class="code-field">
+                        <el-input :model-value="formData.in_parameters[key]?.constant"
+                            @update:model-value="(val: string) => setValueRefConstant(key, val)"
+                            type="textarea" :rows="4"
+                            :placeholder="String(nodeSchema.$defs.InParameters.properties[key].default?.constant ?? '')" />
+                        <el-tooltip :content="_('Edit Code')" placement="top">
+                            <el-button class="code-open-btn" circle size="small" @click="openCodeEditor(key)">
+                                <el-icon><EditPen /></el-icon>
+                            </el-button>
+                        </el-tooltip>
+                    </div>
+                    <el-input v-else-if="valueRefValueType(key) === 'string'"
+                        :model-value="formData.in_parameters[key]?.constant"
+                        @update:model-value="(val: string) => setValueRefConstant(key, val)"
+                        type="textarea" :rows="4"
+                        :placeholder="String(nodeSchema.$defs.InParameters.properties[key].default?.constant ?? '')" />
                     <el-input v-else v-model="formData.in_parameters[key].constant"
                         :placeholder="String(nodeSchema.$defs.InParameters.properties[key].default?.constant ?? '')" />
                 </div>
             </el-form-item>
             <el-form-item v-else :label="paramLabel(key)">
-                <el-input v-model="formData.in_parameters[key]"
+                <el-input v-if="nodeSchema.$defs.InParameters.properties[key].type === 'string'"
+                    :model-value="formData.in_parameters[key]"
+                    @update:model-value="(val: string) => formData!.in_parameters[key] = val"
+                    type="textarea" :rows="4"
+                    :placeholder="String(nodeSchema.$defs.InParameters.properties[key].default)" />
+                <el-input v-else v-model="formData.in_parameters[key]"
                     :type="inputTypeMapping(nodeSchema.$defs.InParameters.properties[key].type)"
                     :placeholder="String(nodeSchema.$defs.InParameters.properties[key].default)" />
             </el-form-item>
@@ -202,15 +224,27 @@
         </template>
 
     </el-form>
+
+    <el-dialog v-model="codeDialogVisible" :title="_('Edit Code')" width="70%" top="5vh"
+        append-to-body destroy-on-close :close-on-press-escape="false">
+        <CodeMirror v-model="codeDraft" basic tab wrap :lang="pythonLang"
+            class="code-editor" />
+        <template #footer>
+            <el-button @click="codeDialogVisible = false">{{ _('Cancel') }}</el-button>
+            <el-button type="primary" @click="saveCodeEditor">{{ _('Save') }}</el-button>
+        </template>
+    </el-dialog>
 </template>
 <script lang="ts" setup>
 import { computed, onMounted, ref, toRaw, watch, nextTick, inject } from 'vue'
+import CodeMirror from 'vue-codemirror6'
+import { python } from '@codemirror/lang-python'
 import { NodeData } from './NodeData';
 import LogicFlow from '@logicflow/core'
 import { getInstances, getNodeTypes, getNodeSchema } from '@/requests';
 import { ElInput } from 'element-plus';
 import { _ } from '@/i18n'
-import { QuestionFilled, Loading } from '@element-plus/icons-vue'
+import { QuestionFilled, Loading, EditPen } from '@element-plus/icons-vue'
 const props = defineProps<{
     data?: NodeData
     graphConfigData?: LogicFlow.GraphConfigData
@@ -423,6 +457,20 @@ function setValueRefConstant(key: string, val: any) {
         ref.mode = "constant"
     }
 }
+// CodeNode 代码编辑器弹窗
+const codeDialogVisible = ref(false)
+const codeDialogKey = ref('')
+const codeDraft = ref('')
+const pythonLang = python()
+function openCodeEditor(key: string) {
+    codeDialogKey.value = key
+    codeDraft.value = String(formData.value?.in_parameters?.[key]?.constant ?? '')
+    codeDialogVisible.value = true
+}
+function saveCodeEditor() {
+    setValueRefConstant(codeDialogKey.value, codeDraft.value)
+    codeDialogVisible.value = false
+}
 function valueRefListKeys(key: string): string[] {
     const list = formData.value?.in_parameters?.[key]
     if (!Array.isArray(list)) return []
@@ -552,12 +600,48 @@ defineExpose({ updateNode, formData })
     width: 100%;
 }
 
+.code-editor {
+    height: 60vh;
+    border: 1px solid #e4e7ed;
+    border-radius: 4px;
+    overflow: hidden;
+    font-size: 13px;
+}
+
+.code-editor .cm-editor {
+    height: 100%;
+}
+
+.code-editor .cm-scroller {
+    overflow: auto;
+}
+
+.code-field {
+    position: relative;
+    width: 100%;
+}
+
+.code-open-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 1;
+}
+
 .value-ref-editor {
     width: 100%;
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 6px;
+}
+
+.value-ref-editor-textarea {
+    align-items: flex-start;
+}
+
+.value-ref-editor-textarea .el-radio-group {
+    margin-top: 4px;
 }
 
 .value-ref-editor .el-radio-group {

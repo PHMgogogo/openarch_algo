@@ -14,8 +14,12 @@ import { NODE_WIDTH } from "./components/Node.vue"
 import type { PipelineData } from './components/PipelineData.ts';
 import Editor from './components/Editor.vue';
 import RunResult from './components/RunResult.vue';
+import JsonEditorLoading from './components/JsonEditorLoading.vue';
 // jsoneditor / katex / markdown-it 只用于 JSON 视图，懒加载避免首屏下载
-const JsonEditor = defineAsyncComponent(() => import('./components/JsonEditor.vue'))
+const JsonEditor = defineAsyncComponent({
+  loader: () => import('./components/JsonEditor.vue'),
+  loadingComponent: JsonEditorLoading,
+})
 const PipelineChat = defineAsyncComponent(() => import('./components/PipelineChat.vue'))
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { _ } from './i18n'

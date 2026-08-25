@@ -16,6 +16,8 @@ export const zhCN: Record<string, string> = {
   // Editor
   'Select a node to edit': '选择一个节点进行编辑',
   'No Title': '无标题',
+  'Editor loading...': '编辑器加载中...',
+  'Edit Code': '编辑代码',
 
   // App
   'Please enter pipeline name': '请输入流水线名称',
@@ -87,6 +89,7 @@ export const zhCN: Record<string, string> = {
   'RoundNode': '舍入',
   'AlarmIfNumberStateKNode': '数值状态告警',
   'SendAlarmNode': '发送告警',
+  'CodeNode': '执行代码',
 
   // ValueRef
   'Constant': '常数',

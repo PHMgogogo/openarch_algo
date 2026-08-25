@@ -1,0 +1,123 @@
+{
+  "name": "",
+  "cron_expr": "",
+  "cron_enable": false,
+  "id": "code",
+  "nodes": {
+    "input": {
+      "id": "input",
+      "node_type": "TextCsvInputNode",
+      "title": "输入数据 (x, y)",
+      "next": [
+        "custom"
+      ],
+      "prev": [],
+      "x": 0.0,
+      "y": 0.0,
+      "order": 0,
+      "read_data": [],
+      "write_data": [],
+      "in_parameters": {
+        "text_csv": {
+          "constant": "x,y\n1,3\n2,6\n3,7\n4,9\n5,11\n6,14\n",
+          "state": null,
+          "mode": "constant"
+        },
+        "with_header": {
+          "constant": true,
+          "state": null,
+          "mode": "constant"
+        },
+        "overwrite_header": {
+          "constant": false,
+          "state": null,
+          "mode": "constant"
+        }
+      },
+      "out_parameters": {},
+      "category": "INPUT"
+    },
+    "config": {
+      "id": "config",
+      "node_type": "WriteStateKNode",
+      "title": "配置：factor=2",
+      "next": [
+        "custom"
+      ],
+      "prev": [],
+      "x": 0.0,
+      "y": 100.0,
+      "order": 0,
+      "read_data": [],
+      "write_data": [],
+      "in_parameters": {
+        "value": {
+          "constant": 2,
+          "state": null,
+          "mode": "constant"
+        }
+      },
+      "out_parameters": {
+        "target": "factor"
+      },
+      "category": "STATE"
+    },
+    "custom": {
+      "id": "custom",
+      "node_type": "CodeNode",
+      "title": "CodeNode：自定义计算",
+      "next": [
+        "output"
+      ],
+      "prev": [
+        "input",
+        "config"
+      ],
+      "x": 300.0,
+      "y": 0.0,
+      "order": 1,
+      "read_data": [
+        "x",
+        "y"
+      ],
+      "write_data": [
+        "z",
+        "z_squared"
+      ],
+      "in_parameters": {
+        "code": {
+          "constant": "def process(node, read_data, context):\n    import torch\n    import time\n    time.sleep(1)\n    x, y = read_data[0], read_data[1]\n    factor = context.state.get(\"factor\", 2.0)\n    # 任意元素级计算 + 控制流（内置节点难以表达）\n    z = torch.where(x > factor, x * y + 1.0, x + y)\n    z_squared = z ** 2\n    # 自定义统计量写入 state\n    context.state.set(\"z_mean\", float(z.mean()))\n    context.state.set(\"z_max\", float(z.max()))\n    # 自定义文本输出\n    context.output.append(\n        \"CodeNode: factor=\" + str(factor)\n        + \", z_mean=\" + f\"{float(z.mean()):.4f}\"\n        + \", z_max=\" + f\"{float(z.max()):.4f}\"\n    )\n    return [z, z_squared], True\n",
+          "state": null,
+          "mode": "constant"
+        }
+      },
+      "out_parameters": {},
+      "category": "REMOTE"
+    },
+    "output": {
+      "id": "output",
+      "node_type": "OutputNode",
+      "title": "汇总输出",
+      "next": [],
+      "prev": [
+        "custom"
+      ],
+      "x": 600.0,
+      "y": 0.0,
+      "order": 2,
+      "read_data": [],
+      "write_data": [],
+      "in_parameters": {
+        "jinja_prompt": {
+          "constant": "CodeNode 演示结果\n数据 z = {{ data.z }}\n数据 z_squared = {{ data.z_squared }}\n状态 z_mean = {{ state.z_mean }}\n状态 z_max = {{ state.z_max }}",
+          "state": null,
+          "mode": "constant"
+        }
+      },
+      "out_parameters": {},
+      "category": "OUTPUT"
+    }
+  },
+  "return_data": [],
+  "return_state": []
+}

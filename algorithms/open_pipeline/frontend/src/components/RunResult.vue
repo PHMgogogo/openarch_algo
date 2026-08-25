@@ -121,6 +121,8 @@ watch(() => props.runResult, () => {
   dataPage.value = 1
 })
 
+const activeTab = ref('data')
+
 const outputViewMode = ref<'plain' | 'markdown'>('plain')
 
 const markdownHTML = computed(() => {
@@ -149,7 +151,7 @@ const markdownHTML = computed(() => {
       <div class="error-type"><strong>{{ _('Error Type') }}:</strong> {{ runError.error_type }}</div>
       <pre class="error-traceback">{{ runError.traceback }}</pre>
     </div>
-    <el-tabs v-if="runResult" model-value="data" class="result-tabs">
+    <el-tabs v-if="runResult" v-model="activeTab" class="result-tabs">
       <el-tab-pane :label="_('Data')" name="data">
         <template v-if="dataTableKeys.length">
           <el-table :data="pagedDataRows" size="small" border stripe style="width: 100%">
