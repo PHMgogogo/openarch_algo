@@ -63,14 +63,6 @@ def text_csv_to_tensor(
     cols = list(zip(*rows))
     return [torch.tensor(col) for col in cols], column_names
 
-
-class DataView(BaseModel):
-    offset_l: int = 0
-    offset_r: int = 0
-    length: int = -1
-    stride: int = 0
-
-
 T = typing.TypeVar("T")
 
 
