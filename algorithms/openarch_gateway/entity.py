@@ -49,7 +49,9 @@ class UrlProxyRule(BaseModel):
         result, groups = self.match(path)
         if not result:
             return None
-        tuples = tuple(groups[idx] for idx in self.dest_index)
+        tuples = tuple(
+            groups[idx] if groups[idx] is not None else "" for idx in self.dest_index
+        )
         return self.dest_format % tuples
 
     def host(self, raw_host: str) -> str:
